@@ -178,5 +178,5 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 ```
 
 #### 3.4 Varyings LitPassVertex 顶点着色器
-![LitShader_Varyings]()  
+ 
 
