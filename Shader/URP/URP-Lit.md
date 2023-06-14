@@ -14,7 +14,7 @@ ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义�
 #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
 ```
 ForwardLit Pass的结构如下图所示：
-![LitShader_1]()  
+![LitShader_1](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_01.png)  
 
 ### 2、LitInput.hlsl
 (1) LitInput中定义了计算表面光照所需的数据，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数。  
@@ -60,5 +60,59 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
 ```
 ### 3、LitForwardPass.hlsl
 LitForwardPass控制着色器的渲染的流程，这里的结构和BuildIn着色器的结构是相似的。
+#### 3.1 struct Attributes 顶点着色器输入结构体
+```hlsl
+struct Attributes
+{
+    float4 positionOS   : POSITION;        // 模型空间中的顶点位置
+    float3 normalOS     : NORMAL;          // 模型空间中的法线
+    float4 tangentOS    : TANGENT;         // 模型空间中的切线
+    float2 texcoord     : TEXCOORD0;
+    float2 staticLightmapUV   : TEXCOORD1; // 静态光照贴图
+    float2 dynamicLightmapUV  : TEXCOORD2; // 动态光照贴图
+    UNITY_VERTEX_INPUT_INSTANCE_ID         // GPU实例化时，顶点属性的索引
+};
+```
+#### 3.2 struct Varyings 顶点着色器输出结构体
+```hlsl
+struct Varyings
+{
+    float2 uv                       : TEXCOORD0;
 
+#if defined(REQUIRES_WORLD_SPACE_POS_INTERPOLATOR)
+    float3 positionWS               : TEXCOORD1;    // 世界空间中的顶点位置
+#endif
+
+    float3 normalWS                 : TEXCOORD2;    // 世界空间中的法线
+#if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR)
+    half4 tangentWS                : TEXCOORD3;     // xyz: tangent, w: sign
+#endif
+    float3 viewDirWS                : TEXCOORD4;    // 世界空间中的观察方向
+
+#ifdef _ADDITIONAL_LIGHTS_VERTEX
+    half4 fogFactorAndVertexLight   : TEXCOORD5; // x: fogFactor, yzw: vertex light //雾效衰减因子和顶点光计算
+#else
+    half  fogFactor                 : TEXCOORD5;    // 雾效衰减因子
+#endif
+
+#if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+    float4 shadowCoord              : TEXCOORD6;    // 应该是存放提取阴影贴图的uv坐标的
+#endif
+
+#if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
+    half3 viewDirTS                : TEXCOORD7;    
+#endif
+
+    DECLARE_LIGHTMAP_OR_SH(staticLightmapUV, vertexSH, 8);    // 选择使用LightMap还是SH
+#ifdef DYNAMICLIGHTMAP_ON
+    float2  dynamicLightmapUV : TEXCOORD9;            // Dynamic lightmap UVs
+#endif
+
+    float4 positionCS               : SV_POSITION;    // 裁剪空间中的顶点位置
+    UNITY_VERTEX_INPUT_INSTANCE_ID
+    UNITY_VERTEX_OUTPUT_STEREO
+};
+```
+
+#### 3.3 Varyings LitPassVertex 顶点着色器
 
