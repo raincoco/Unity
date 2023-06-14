@@ -178,5 +178,5 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 ```
 
 #### 3.4 Varyings LitPassVertex 顶点着色器
-![LitShader_1](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_Varyings.png)  
+![LitShader_Varyings](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_Varyings.png)  
 https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_Varyings.png
