@@ -14,7 +14,7 @@ ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义�
 #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
 ```
 ForwardLit Pass的结构如下图所示：
-![LitShader_1](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_1.png)  
+![LitShader_1]()  
 
 ### 2、LitInput.hlsl
 (1) LitInput中定义了计算表面光照所需的数据，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数。  
