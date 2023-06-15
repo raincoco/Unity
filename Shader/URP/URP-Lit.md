@@ -2,7 +2,7 @@
 Lit Shader是URP管线内置的用于渲染写实效果的光照着色器，该着色器使用URP中计算量最大的着色模型。  
 Lit Shader要正常渲染至少需要保证有ForwardLit、DepthNormals两个Pass，如果要渲染阴影则还需ShadowCaster Pass。
 ## 一、ForwardLit Pass
-Lit Shader的前向渲染Pass，这个Pass包含了大量的shader_feature与multi_compile变体。  
+Lit Shader的前向渲染Pass，控制着色器的渲染的流程，结构和BuildIn着色器的结构是相似的。这个Pass包含了大量的shader_feature与multi_compile变体。  
 
 >shader_feature与multi_compile的区别：  
 两者的区别在于Unity在最终的版本中不会包括shader_feature着色器的未使用的变体。shader_feature更适合处理从material中设置的关键字，而multi_compile则更适合用来处理从全局代码中设置的关键字。
@@ -16,9 +16,9 @@ ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义�
 ForwardLit Pass的结构如下图所示：
 ![LitShader_1](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_01.png)  
 
-### 2、LitInput.hlsl
+### 2、表面光照数据输入
 (1) LitInput中定义了计算表面光照所需的数据，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数。  
-(2) LitInput中还有一个初始化函数InitializeStandardLitSurfaceData，用来初始化这些数据。
+(2) LitInput中还有一个初始化函数InitializeStandardLitSurfaceData，用来初始化模型表面数据。
 ```hlsl
 inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)
 {
@@ -58,9 +58,8 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
 #endif
 }
 ```
-### 3、LitForwardPass.hlsl
-LitForwardPass控制着色器的渲染的流程，这里的结构和BuildIn着色器的结构是相似的。
-#### 3.1 struct Attributes 顶点着色器输入结构体
+
+### 3、 struct Attributes 顶点着色器输入结构体
 ```hlsl
 struct Attributes
 {
@@ -73,7 +72,7 @@ struct Attributes
     UNITY_VERTEX_INPUT_INSTANCE_ID         // GPU实例化时，顶点属性的索引
 };
 ```
-#### 3.2 struct Varyings 顶点着色器输出结构体
+### 4、struct Varyings 顶点着色器输出结构体
 ```hlsl
 struct Varyings
 {
@@ -114,7 +113,7 @@ struct Varyings
 };
 ```
 
-#### 3.3 InitializeInputData 初始化输入数据
+### 5、InitializeInputData 初始化输入数据
 ```hlsl
 void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData)
 {
@@ -177,7 +176,7 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 }
 ```
 
-#### 3.4 Varyings LitPassVertex 顶点着色器
+### 6、 Varyings LitPassVertex 顶点着色器
 ![LitShader_Varyings](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_Varyings.png)
 ```hlsl
 Varyings LitPassVertex(Attributes input)
@@ -245,12 +244,12 @@ Varyings LitPassVertex(Attributes input)
 }
 ```
 
-3.5 LitPassFragment片元着色器
+### 7、 LitPassFragment片元着色器
 ```hlsl
 half4 LitPassFragment(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
-    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input); //XR项目使用
 
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
@@ -281,3 +280,48 @@ half4 LitPassFragment(Varyings input) : SV_Target
     return color;
 }
 ```
+
+#### 7.1 UNITY_SETUP_INSTANCE_ID 实例化ID
+UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETUP_INSTANCE_ID(input)可以用来访问全局unity_InstanceID，需放在顶点和片元着色器起始第一行。
+如果需要将实例化ID传到片段着色器，则需在顶点着色器中增加UNITY_TRANSFER_INSTANCE_ID(v, o);
+
+#### 7.2 PARALLAXMA 视差图
+```hlsl
+#if defined(_PARALLAXMAP)
+#if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)  
+    half3 viewDirTS = input.viewDirTS;
+#else
+    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+    half3 viewDirTS = GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, viewDirWS);
+#endif
+    ApplyPerPixelDisplacement(viewDirTS, input.uv);
+#endif
+```
+URP预设宏_PARALLAXMAP来进行视差映射，其中ApplyPerPixelDisplacement负责计算视差图，如下。
+```hlsl
+void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
+{
+#if defined(_PARALLAXMAP)
+    uv += ParallaxMapping(TEXTURE2D_ARGS(_ParallaxMap, sampler_ParallaxMap), viewDirTS, _Parallax, uv);
+#endif
+}
+```
+```hlsl
+float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 viewDirTS, half scale, float2 uv)
+{
+    half h = SAMPLE_TEXTURE2D(heightMap, sampler_heightMap, uv).g;
+    float2 offset = ParallaxOffset1Step(h, scale, viewDirTS);
+    return offset;
+}
+```
+```hlsl
+half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
+{
+    height = height * amplitude - amplitude / 2.0;
+    half3 v = normalize(viewDirTS);
+    v.z += 0.42;
+    return height * (v.xy / v.z);
+}
+```
+
+#### 7.3 PARALLAXMA 视差图
