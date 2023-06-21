@@ -8,7 +8,7 @@ Lit Shader的前向渲染Pass，控制着色器的渲染的流程，结构和Bui
 两者的区别在于Unity在最终的版本中不会包括shader_feature着色器的未使用的变体。shader_feature更适合处理从material中设置的关键字，而multi_compile则更适合用来处理从全局代码中设置的关键字。
 
 ### 1、ForwardLit Pass的结构
-ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义了Shader所需要的输入数据变量，LitForwardPass.hlsl则负责Shader的渲染流程。  
+ForwardLit的代码都包含在以下两个hsls文件中，`LitInput.hlsl`定义了Shader所需要的输入数据变量，`LitForwardPass.hlsl`则负责Shader的渲染流程。  
 ```hlsl
 #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
@@ -72,9 +72,9 @@ struct Varyings
 ```
 
 ### 3、LitInput 输入数据
-LitInput.hlsl内声明了外部输入变量，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数，以及用来初始化模型表面数据的初始化函数InitializeStandardLitSurfaceData。
+`LitInput.hlsl`内声明了外部输入变量，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数，以及用来初始化模型表面数据的初始化函`数InitializeStandardLitSurfaceData`。
 
-_SPECULAR_SETUP宏决定着色器使用的工作流，当_SPECULAR_SETUP被定义时使用反射流，未被定义时使用金属流。
+`_SPECULAR_SETUP`宏决定着色器使用的工作流，当`_SPECULAR_SETUP`被定义时使用反射流，未被定义时使用金属流。
 ```hlsl
 #ifdef _SPECULAR_SETUP
     #define SAMPLE_METALLICSPECULAR(uv) SAMPLE_TEXTURE2D(_SpecGlossMap, sampler_SpecGlossMap, uv)
@@ -193,7 +193,8 @@ Varyings LitPassVertex(Attributes input)
 ```
 
 #### 4.1 vertexInput 顶点输入
-顶点输入结构体 VertexPositionInputs
+顶点输入结构体 VertexPositionInputs<br>
+函数声明位置：Lighting.hlsl
 ```hlsl
 struct VertexPositionInputs
 {
@@ -204,7 +205,8 @@ struct VertexPositionInputs
 };
 ```
 
-获取顶点数据函数 GetVertexPositionInputs
+获取顶点数据函数 GetVertexPositionInputs<br>
+函数声明位置：ShaderVariablesFunctions.hlsl
 ```hlsl
 VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
 {
@@ -221,7 +223,8 @@ VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
 }
 ```
 #### 4.2 normalInput 法线输入
-法线输入结构体 VertexNormalInputs
+法线输入结构体 VertexNormalInputs<br>
+函数声明位置：Lighting.hlsl
 ```hlsl
 struct VertexNormalInputs
 {
@@ -230,7 +233,8 @@ struct VertexNormalInputs
     float3 normalWS;
 };
 ```
-获取法线数据函数 GetVertexNormalInputs
+获取法线数据函数 GetVertexNormalInputs<br>
+函数声明位置：ShaderVariablesFunctions.hlsl
 ```hlsl 
 VertexNormalInputs GetVertexNormalInputs(float3 normalOS)
 {
@@ -253,6 +257,28 @@ VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
     return tbn;
 }
 ```
+
+#### 4.3 vertexLight 顶点光照
+多光源顶点光计算，函数`VertexLighting`声明位置：Lighting.hlsl。
+```hlsl
+half3 VertexLighting(float3 positionWS, half3 normalWS)
+{
+    half3 vertexLightColor = half3(0.0, 0.0, 0.0);
+
+#ifdef _ADDITIONAL_LIGHTS_VERTEX
+    uint lightsCount = GetAdditionalLightsCount();
+    LIGHT_LOOP_BEGIN(lightsCount)
+        Light light = GetAdditionalLight(lightIndex, positionWS);
+        half3 lightColor = light.color * light.distanceAttenuation;
+        vertexLightColor += LightingLambert(lightColor, light.direction, normalWS);
+    LIGHT_LOOP_END
+#endif
+
+    return vertexLightColor;
+}
+```
+
+#### 4.4 vertexLight 顶点光照
 ### 6、 LitPassFragment片元着色器
 ```hlsl
 half4 LitPassFragment(Varyings input) : SV_Target
