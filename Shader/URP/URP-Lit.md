@@ -352,7 +352,8 @@ real ComputeFogFactor(float zPositionCS)
     output.viewDirTS = viewDirTS;
 #endif
 ```
-`GetWorldSpaceNormalizeViewDir`和`GetViewDirectionTangentSpace`声明在`ShaderVariablesFunctions.hlsl`中。<br>
+`GetWorldSpaceNormalizeViewDir`声明在`ShaderVariablesFunctions.hlsl`中。<br>
+`GetViewDirectionTangentSpace`声明在`ParallaxMapping.hlsl`中。<br>
 
 当定义有`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`时，先调用`GetWorldSpaceNormalizeViewDir`计算出世界空间的观察矢量viewDirWS，再调用`GetViewDirectionTangentSpace`计算出viewDirTS 存入output.viewDirTS。
 
