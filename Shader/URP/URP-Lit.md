@@ -194,7 +194,7 @@ Varyings LitPassVertex(Attributes input)
 
 #### 4.1 vertexInput 顶点输入
 顶点输入结构体 VertexPositionInputs<br>
-函数声明位置：Lighting.hlsl
+结构体声明位置：Lighting.hlsl
 ```hlsl
 struct VertexPositionInputs
 {
@@ -224,7 +224,7 @@ VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
 ```
 #### 4.2 normalInput 法线输入
 法线输入结构体 VertexNormalInputs<br>
-函数声明位置：Lighting.hlsl
+结构体声明位置：Lighting.hlsl
 ```hlsl
 struct VertexNormalInputs
 {
