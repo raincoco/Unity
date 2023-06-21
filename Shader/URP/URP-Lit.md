@@ -8,7 +8,7 @@ Lit Shader的前向渲染Pass，控制着色器的渲染的流程，结构和Bui
 两者的区别在于Unity在最终的版本中不会包括shader_feature着色器的未使用的变体。shader_feature更适合处理从material中设置的关键字，而multi_compile则更适合用来处理从全局代码中设置的关键字。
 
 ### 1、ForwardLit Pass的结构
-ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义了Shader所需要输入的数据变量，LitForwardPass.hlsl则负责Shader的渲染流程。  
+ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义了Shader所需要的输入数据变量，LitForwardPass.hlsl则负责Shader的渲染流程。  
 ```hlsl
 #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
@@ -16,50 +16,8 @@ ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义�
 ForwardLit Pass的结构如下图所示：
 ![LitShader_1](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_01.png)  
 
-### 2、表面光照数据输入
-(1) LitInput中定义了计算表面光照所需的数据，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数。  
-(2) LitInput中还有一个初始化函数InitializeStandardLitSurfaceData，用来初始化模型表面数据。
-```hlsl
-inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)
-{
-    half4 albedoAlpha = SampleAlbedoAlpha(uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap));
-    outSurfaceData.alpha = Alpha(albedoAlpha.a, _BaseColor, _Cutoff);
-
-    half4 specGloss = SampleMetallicSpecGloss(uv, albedoAlpha.a);
-    outSurfaceData.albedo = albedoAlpha.rgb * _BaseColor.rgb;
-
-#if _SPECULAR_SETUP
-    outSurfaceData.metallic = half(1.0);
-    outSurfaceData.specular = specGloss.rgb;
-#else
-    outSurfaceData.metallic = specGloss.r;
-    outSurfaceData.specular = half3(0.0, 0.0, 0.0);
-#endif
-
-    outSurfaceData.smoothness = specGloss.a;
-    outSurfaceData.normalTS = SampleNormal(uv, TEXTURE2D_ARGS(_BumpMap, sampler_BumpMap), _BumpScale);
-    outSurfaceData.occlusion = SampleOcclusion(uv);
-    outSurfaceData.emission = SampleEmission(uv, _EmissionColor.rgb, TEXTURE2D_ARGS(_EmissionMap, sampler_EmissionMap));
-
-#if defined(_CLEARCOAT) || defined(_CLEARCOATMAP)
-    half2 clearCoat = SampleClearCoat(uv);
-    outSurfaceData.clearCoatMask       = clearCoat.r;
-    outSurfaceData.clearCoatSmoothness = clearCoat.g;
-#else
-    outSurfaceData.clearCoatMask       = half(0.0);
-    outSurfaceData.clearCoatSmoothness = half(0.0);
-#endif
-
-#if defined(_DETAIL)
-    half detailMask = SAMPLE_TEXTURE2D(_DetailMask, sampler_DetailMask, uv).a;
-    float2 detailUv = uv * _DetailAlbedoMap_ST.xy + _DetailAlbedoMap_ST.zw;
-    outSurfaceData.albedo = ApplyDetailAlbedo(detailUv, outSurfaceData.albedo, detailMask);
-    outSurfaceData.normalTS = ApplyDetailNormal(detailUv, outSurfaceData.normalTS, detailMask);
-#endif
-}
-```
-
-### 3、 struct Attributes 顶点着色器输入结构体
+### 2、struct Attributes And struct Varyings 顶点着色器输入/输出结构体
+#### 2.1 struct Attributes 顶点着色器输入结构体
 ```hlsl
 struct Attributes
 {
@@ -72,7 +30,7 @@ struct Attributes
     UNITY_VERTEX_INPUT_INSTANCE_ID         // GPU实例化时，顶点属性的索引
 };
 ```
-### 4、struct Varyings 顶点着色器输出结构体
+#### 2.2 struct Varyings 顶点着色器输出结构体
 ```hlsl
 struct Varyings
 {
@@ -113,70 +71,20 @@ struct Varyings
 };
 ```
 
-### 5、InitializeInputData 初始化输入数据
+### 3、LitInput 输入数据
+LitInput.hlsl内声明了外部输入变量，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数，以及用来初始化模型表面数据的初始化函数InitializeStandardLitSurfaceData。
+LitInput.hlsl定义的函数：
 ```hlsl
-void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData)
-{
-    inputData = (InputData)0;
-
-#if defined(REQUIRES_WORLD_SPACE_POS_INTERPOLATOR)
-    inputData.positionWS = input.positionWS;
-#endif
-
-    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
-#if defined(_NORMALMAP) || defined(_DETAIL)
-    float sgn = input.tangentWS.w;      // should be either +1 or -1
-    float3 bitangent = sgn * cross(input.normalWS.xyz, input.tangentWS.xyz);
-    half3x3 tangentToWorld = half3x3(input.tangentWS.xyz, bitangent.xyz, input.normalWS.xyz);
-
-    #if defined(_NORMALMAP)
-    inputData.tangentToWorld = tangentToWorld;
-    #endif
-    inputData.normalWS = TransformTangentToWorld(normalTS, tangentToWorld);
-#else
-    inputData.normalWS = input.normalWS;
-#endif
-
-    inputData.normalWS = NormalizeNormalPerPixel(inputData.normalWS);
-    inputData.viewDirectionWS = viewDirWS;
-
-#if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
-    inputData.shadowCoord = input.shadowCoord;
-#elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
-    inputData.shadowCoord = TransformWorldToShadowCoord(inputData.positionWS);
-#else
-    inputData.shadowCoord = float4(0, 0, 0, 0);
-#endif
-#ifdef _ADDITIONAL_LIGHTS_VERTEX
-    inputData.fogCoord = InitializeInputDataFog(float4(input.positionWS, 1.0), input.fogFactorAndVertexLight.x);
-    inputData.vertexLighting = input.fogFactorAndVertexLight.yzw;
-#else
-    inputData.fogCoord = InitializeInputDataFog(float4(input.positionWS, 1.0), input.fogFactor);
-#endif
-
-#if defined(DYNAMICLIGHTMAP_ON)
-    inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.dynamicLightmapUV, input.vertexSH, inputData.normalWS);
-#else
-    inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.vertexSH, inputData.normalWS);
-#endif
-
-    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
-    inputData.shadowMask = SAMPLE_SHADOWMASK(input.staticLightmapUV);
-
-    #if defined(DEBUG_DISPLAY)
-    #if defined(DYNAMICLIGHTMAP_ON)
-    inputData.dynamicLightmapUV = input.dynamicLightmapUV;
-    #endif
-    #if defined(LIGHTMAP_ON)
-    inputData.staticLightmapUV = input.staticLightmapUV;
-    #else
-    inputData.vertexSH = input.vertexSH;
-    #endif
-    #endif
-}
+half4 SampleMetallicSpecGloss(float2 uv, half albedoAlpha)  //采样金属光泽贴图              
+half  SampleOcclusion(float2 uv)                            //采样AO贴图
+half2 SampleClearCoat(float2 uv)                            //采样ClearCoat透明涂层贴图
+void  ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)          //使用逐像素位移，使用视差图
+half3 ScaleDetailAlbedo(half3 detailAlbedo, half scale)                    //细节图缩放比
+half3 ApplyDetailAlbedo(float2 detailUv, half3 albedo, half detailMask)    //使用基础色细节图
+half3 ApplyDetailNormal(float2 detailUv, half3 normalTS, half detailMask)  //使用法线细节图   
+inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)    //初始化表面基础光照数据
 ```
-
-### 6、 Varyings LitPassVertex 顶点着色器
+### 5、 Varyings LitPassVertex 顶点着色器
 ![LitShader_Varyings](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_Varyings.png)
 ```hlsl
 Varyings LitPassVertex(Attributes input)
@@ -244,7 +152,7 @@ Varyings LitPassVertex(Attributes input)
 }
 ```
 
-### 7、 LitPassFragment片元着色器
+### 6、 LitPassFragment片元着色器
 ```hlsl
 half4 LitPassFragment(Varyings input) : SV_Target
 {
@@ -281,11 +189,11 @@ half4 LitPassFragment(Varyings input) : SV_Target
 }
 ```
 
-#### 7.1 UNITY_SETUP_INSTANCE_ID 实例化ID
+#### 6.1 UNITY_SETUP_INSTANCE_ID 实例化ID
 UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETUP_INSTANCE_ID(input)可以用来访问全局unity_InstanceID，需放在顶点和片元着色器起始第一行。
 如果需要将实例化ID传到片段着色器，则需在顶点着色器中增加UNITY_TRANSFER_INSTANCE_ID(v, o);
 
-#### 7.2 PARALLAXMA 视差图
+#### 6.2 PARALLAXMA 视差图
 ```hlsl
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)  
@@ -324,4 +232,178 @@ half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 }
 ```
 
-#### 7.4 
+#### 6.3 数据初始化
+初始化模型表面数据和外部输入数据。
+```hlsl
+SurfaceData surfaceData;
+InitializeStandardLitSurfaceData(input.uv, surfaceData);
+
+InputData inputData;
+InitializeInputData(input, surfaceData.normalTS, inputData);
+```
+##### 6.3.1 初始化表面数据
+SurfaceData声明在SurfaceData.hlsl中，如下。
+
+```hlsl
+struct SurfaceData
+{
+    half3 albedo;
+    half3 specular;
+    half  metallic;
+    half  smoothness;
+    half3 normalTS;
+    half3 emission;
+    half  occlusion;
+    half  alpha;
+    half  clearCoatMask;
+    half  clearCoatSmoothness;
+};
+```
+InitializeStandardLitSurfaceData声明在LitInput.hlsl中，如下。
+```hlsl
+inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)
+{
+    half4 albedoAlpha = SampleAlbedoAlpha(uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap));
+    outSurfaceData.alpha = Alpha(albedoAlpha.a, _BaseColor, _Cutoff);
+
+    half4 specGloss = SampleMetallicSpecGloss(uv, albedoAlpha.a);
+    outSurfaceData.albedo = albedoAlpha.rgb * _BaseColor.rgb;
+
+#if _SPECULAR_SETUP
+    outSurfaceData.metallic = half(1.0);
+    outSurfaceData.specular = specGloss.rgb;
+#else
+    outSurfaceData.metallic = specGloss.r;
+    outSurfaceData.specular = half3(0.0, 0.0, 0.0);
+#endif
+
+    outSurfaceData.smoothness = specGloss.a;
+    outSurfaceData.normalTS = SampleNormal(uv, TEXTURE2D_ARGS(_BumpMap, sampler_BumpMap), _BumpScale);
+    outSurfaceData.occlusion = SampleOcclusion(uv);
+    outSurfaceData.emission = SampleEmission(uv, _EmissionColor.rgb, TEXTURE2D_ARGS(_EmissionMap, sampler_EmissionMap));
+
+#if defined(_CLEARCOAT) || defined(_CLEARCOATMAP)
+    half2 clearCoat = SampleClearCoat(uv);
+    outSurfaceData.clearCoatMask       = clearCoat.r;
+    outSurfaceData.clearCoatSmoothness = clearCoat.g;
+#else
+    outSurfaceData.clearCoatMask       = half(0.0);
+    outSurfaceData.clearCoatSmoothness = half(0.0);
+#endif
+
+#if defined(_DETAIL)
+    half detailMask = SAMPLE_TEXTURE2D(_DetailMask, sampler_DetailMask, uv).a;
+    float2 detailUv = uv * _DetailAlbedoMap_ST.xy + _DetailAlbedoMap_ST.zw;
+    outSurfaceData.albedo = ApplyDetailAlbedo(detailUv, outSurfaceData.albedo, detailMask);
+    outSurfaceData.normalTS = ApplyDetailNormal(detailUv, outSurfaceData.normalTS, detailMask);
+#endif
+}
+```
+##### 6.3.2 初始化输入数据
+InputData声明在Input.hlsl中，如下。
+```hlsl
+struct InputData
+{
+    float3  positionWS;
+    float4  positionCS;
+    float3   normalWS;
+    half3   viewDirectionWS;
+    float4  shadowCoord;
+    half    fogCoord;
+    half3   vertexLighting;
+    half3   bakedGI;
+    float2  normalizedScreenSpaceUV;
+    half4   shadowMask;
+    half3x3 tangentToWorld;
+
+    #if defined(DEBUG_DISPLAY)
+    half2   dynamicLightmapUV;
+    half2   staticLightmapUV;
+    float3  vertexSH;
+
+    half3 brdfDiffuse;
+    half3 brdfSpecular;
+    float2 uv;
+    uint mipCount;
+
+    // texelSize :
+    // x = 1 / width
+    // y = 1 / height
+    // z = width
+    // w = height
+    float4 texelSize;
+
+    // mipInfo :
+    // x = quality settings minStreamingMipLevel
+    // y = original mip count for texture
+    // z = desired on screen mip level
+    // w = loaded mip level
+    float4 mipInfo;
+    #endif
+};
+```
+InitializeInputData声明在LitForwardPass.hlsl中，如下。
+```hlsl
+void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData)
+{
+    inputData = (InputData)0;
+
+#if defined(REQUIRES_WORLD_SPACE_POS_INTERPOLATOR)
+    inputData.positionWS = input.positionWS;
+#endif
+
+    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+#if defined(_NORMALMAP) || defined(_DETAIL)
+    float sgn = input.tangentWS.w;      // should be either +1 or -1
+    float3 bitangent = sgn * cross(input.normalWS.xyz, input.tangentWS.xyz);
+    half3x3 tangentToWorld = half3x3(input.tangentWS.xyz, bitangent.xyz, input.normalWS.xyz);
+
+    #if defined(_NORMALMAP)
+    inputData.tangentToWorld = tangentToWorld;
+    #endif
+    inputData.normalWS = TransformTangentToWorld(normalTS, tangentToWorld);
+#else
+    inputData.normalWS = input.normalWS;
+#endif
+
+    inputData.normalWS = NormalizeNormalPerPixel(inputData.normalWS);
+    inputData.viewDirectionWS = viewDirWS;
+
+#if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
+    inputData.shadowCoord = input.shadowCoord;
+#elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
+    inputData.shadowCoord = TransformWorldToShadowCoord(inputData.positionWS);
+#else
+    inputData.shadowCoord = float4(0, 0, 0, 0);
+#endif
+#ifdef _ADDITIONAL_LIGHTS_VERTEX
+    inputData.fogCoord = InitializeInputDataFog(float4(input.positionWS, 1.0), input.fogFactorAndVertexLight.x);
+    inputData.vertexLighting = input.fogFactorAndVertexLight.yzw;
+#else
+    inputData.fogCoord = InitializeInputDataFog(float4(input.positionWS, 1.0), input.fogFactor);
+#endif
+
+#if defined(DYNAMICLIGHTMAP_ON)
+    inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.dynamicLightmapUV, input.vertexSH, inputData.normalWS);
+#else
+    inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.vertexSH, inputData.normalWS);
+#endif
+
+    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
+    inputData.shadowMask = SAMPLE_SHADOWMASK(input.staticLightmapUV);
+
+    #if defined(DEBUG_DISPLAY)
+    #if defined(DYNAMICLIGHTMAP_ON)
+    inputData.dynamicLightmapUV = input.dynamicLightmapUV;
+    #endif
+    #if defined(LIGHTMAP_ON)
+    inputData.staticLightmapUV = input.staticLightmapUV;
+    #else
+    inputData.vertexSH = input.vertexSH;
+    #endif
+    #endif
+}
+```
+
+##### 6.3.3 InitializeStandardLitSurfaceData
+
