@@ -16,8 +16,8 @@ ForwardLit的代码都包含在以下两个hsls文件中，LitInput.hlsl定义�
 ForwardLit Pass的结构如下图所示：
 ![LitShader_1](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_01.png)  
 
-### 2、struct Attributes And struct Varyings 顶点着色器输入/输出结构体
-#### 2.1 struct Attributes 顶点着色器输入结构体
+### 2、Attributes And Varyings 顶点着色器输入/输出结构体
+#### 2.1 Attributes 顶点着色器输入结构体
 ```hlsl
 struct Attributes
 {
@@ -30,7 +30,7 @@ struct Attributes
     UNITY_VERTEX_INPUT_INSTANCE_ID         // GPU实例化时，顶点属性的索引
 };
 ```
-#### 2.2 struct Varyings 顶点着色器输出结构体
+#### 2.2 Varyings 顶点着色器输出结构体
 ```hlsl
 struct Varyings
 {
@@ -73,7 +73,51 @@ struct Varyings
 
 ### 3、LitInput 输入数据
 LitInput.hlsl内声明了外部输入变量，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数，以及用来初始化模型表面数据的初始化函数InitializeStandardLitSurfaceData。
-LitInput.hlsl定义的函数：
+
+_SPECULAR_SETUP宏决定着色器使用的工作流，当_SPECULAR_SETUP被定义时使用反射流，未被定义时使用金属流。
+```hlsl
+#ifdef _SPECULAR_SETUP
+    #define SAMPLE_METALLICSPECULAR(uv) SAMPLE_TEXTURE2D(_SpecGlossMap, sampler_SpecGlossMap, uv)
+#else
+    #define SAMPLE_METALLICSPECULAR(uv) SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_MetallicGlossMap, uv)
+#endif
+```
+
+LitInput.hlsl声明的变量：
+```hlsl
+CBUFFER_START(UnityPerMaterial)
+float4 _BaseMap_ST;
+float4 _DetailAlbedoMap_ST;
+half4 _BaseColor;
+half4 _SpecColor;
+half4 _EmissionColor;
+half _Cutoff;
+half _Smoothness;
+half _Metallic;
+half _BumpScale;
+half _Parallax;
+half _OcclusionStrength;
+half _ClearCoatMask;
+half _ClearCoatSmoothness;
+half _DetailAlbedoMapScale;
+half _DetailNormalMapScale;
+half _Surface;
+CBUFFER_END
+```
+
+LitInput.hlsl声明的采样器：
+```hlsl
+TEXTURE2D(_ParallaxMap);        SAMPLER(sampler_ParallaxMap);
+TEXTURE2D(_OcclusionMap);       SAMPLER(sampler_OcclusionMap);
+TEXTURE2D(_DetailMask);         SAMPLER(sampler_DetailMask);
+TEXTURE2D(_DetailAlbedoMap);    SAMPLER(sampler_DetailAlbedoMap);
+TEXTURE2D(_DetailNormalMap);    SAMPLER(sampler_DetailNormalMap);
+TEXTURE2D(_MetallicGlossMap);   SAMPLER(sampler_MetallicGlossMap);
+TEXTURE2D(_SpecGlossMap);       SAMPLER(sampler_SpecGlossMap);
+TEXTURE2D(_ClearCoatMap);       SAMPLER(sampler_ClearCoatMap);
+```
+
+LitInput.hlsl声明的函数：
 ```hlsl
 half4 SampleMetallicSpecGloss(float2 uv, half albedoAlpha)  //采样金属光泽贴图              
 half  SampleOcclusion(float2 uv)                            //采样AO贴图
@@ -84,7 +128,8 @@ half3 ApplyDetailAlbedo(float2 detailUv, half3 albedo, half detailMask)    //使
 half3 ApplyDetailNormal(float2 detailUv, half3 normalTS, half detailMask)  //使用法线细节图   
 inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)    //初始化表面基础光照数据
 ```
-### 5、 Varyings LitPassVertex 顶点着色器
+
+### 4、 Varyings LitPassVertex 顶点着色器
 ![LitShader_Varyings](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_Varyings.png)
 ```hlsl
 Varyings LitPassVertex(Attributes input)
@@ -96,10 +141,6 @@ Varyings LitPassVertex(Attributes input)
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
     VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
-
-    // normalWS and tangentWS already normalize.
-    // this is required to avoid skewing the direction during interpolation
-    // also required for per-vertex lighting and SH evaluation
     VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS, input.tangentOS);
 
     half3 vertexLight = VertexLighting(vertexInput.positionWS, normalInput.normalWS);
@@ -111,7 +152,6 @@ Varyings LitPassVertex(Attributes input)
 
     output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
 
-    // already normalized from normal transform to WS.
     output.normalWS = normalInput.normalWS;
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR) || defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
     real sign = input.tangentOS.w * GetOddNegativeScale();
@@ -152,6 +192,67 @@ Varyings LitPassVertex(Attributes input)
 }
 ```
 
+#### 4.1 vertexInput 顶点输入
+顶点输入结构体 VertexPositionInputs
+```hlsl
+struct VertexPositionInputs
+{
+    float3 positionWS; // World space position
+    float3 positionVS; // View space position
+    float4 positionCS; // Homogeneous clip space position
+    float4 positionNDC;// Homogeneous normalized device coordinates
+};
+```
+
+获取顶点数据函数 GetVertexPositionInputs
+```hlsl
+VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
+{
+    VertexPositionInputs input;
+    input.positionWS = TransformObjectToWorld(positionOS);
+    input.positionVS = TransformWorldToView(input.positionWS);
+    input.positionCS = TransformWorldToHClip(input.positionWS);
+
+    float4 ndc = input.positionCS * 0.5f;
+    input.positionNDC.xy = float2(ndc.x, ndc.y * _ProjectionParams.x) + ndc.w;
+    input.positionNDC.zw = input.positionCS.zw;
+
+    return input;
+}
+```
+#### 4.2 normalInput 法线输入
+法线输入结构体 VertexNormalInputs
+```hlsl
+struct VertexNormalInputs
+{
+    real3 tangentWS;
+    real3 bitangentWS;
+    float3 normalWS;
+};
+```
+获取法线数据函数 GetVertexNormalInputs
+```hlsl 
+VertexNormalInputs GetVertexNormalInputs(float3 normalOS)
+{
+    VertexNormalInputs tbn;
+    tbn.tangentWS = real3(1.0, 0.0, 0.0);
+    tbn.bitangentWS = real3(0.0, 1.0, 0.0);
+    tbn.normalWS = TransformObjectToWorldNormal(normalOS);
+    return tbn;
+}
+
+VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
+{
+    VertexNormalInputs tbn;
+
+    // mikkts space compliant. only normalize when extracting normal at frag.
+    real sign = real(tangentOS.w) * GetOddNegativeScale();
+    tbn.normalWS = TransformObjectToWorldNormal(normalOS);
+    tbn.tangentWS = real3(TransformObjectToWorldDir(tangentOS.xyz));
+    tbn.bitangentWS = real3(cross(tbn.normalWS, float3(tbn.tangentWS))) * sign;
+    return tbn;
+}
+```
 ### 6、 LitPassFragment片元着色器
 ```hlsl
 half4 LitPassFragment(Varyings input) : SV_Target
