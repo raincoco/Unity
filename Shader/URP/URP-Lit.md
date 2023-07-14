@@ -193,8 +193,9 @@ Varyings LitPassVertex(Attributes input)
 ```
 
 #### 4.1 vertexInput 顶点输入
-顶点输入结构体 VertexPositionInputs<br>
-结构体声明位置：Lighting.hlsl
+VertexPositionInputs<br>
+顶点空间位置输入结构体，声明了顶点的世界空间位置、观察空间位置、裁剪空间位置，以及（NDC）标准化设备坐标。<br>
+结构体声明位置：Core.hlsl
 ```hlsl
 struct VertexPositionInputs
 {
@@ -205,7 +206,8 @@ struct VertexPositionInputs
 };
 ```
 
-获取顶点数据函数 GetVertexPositionInputs<br>
+GetVertexPositionInputs<br>
+获取顶点空间位置数据的函数，使用模型空间的顶点位置计算出世界空间、观察空间、裁剪空间、NDC中的顶点位置。<br>
 函数声明位置：ShaderVariablesFunctions.hlsl
 ```hlsl
 VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
@@ -223,8 +225,9 @@ VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
 }
 ```
 #### 4.2 normalInput 法线输入
-法线输入结构体 VertexNormalInputs<br>
-结构体声明位置：Lighting.hlsl
+VertexNormalInputs<br>
+顶点法线输入结构体，声明了顶点世界空间下的法线、切线、副切线。<br>
+结构体声明位置：Core.hlsl
 ```hlsl
 struct VertexNormalInputs
 {
@@ -233,18 +236,10 @@ struct VertexNormalInputs
     float3 normalWS;
 };
 ```
-获取法线数据函数 GetVertexNormalInputs<br>
+GetVertexNormalInputs<br>
+获取顶点法线数据的函数，
 函数声明位置：ShaderVariablesFunctions.hlsl
 ```hlsl 
-VertexNormalInputs GetVertexNormalInputs(float3 normalOS)
-{
-    VertexNormalInputs tbn;
-    tbn.tangentWS = real3(1.0, 0.0, 0.0);
-    tbn.bitangentWS = real3(0.0, 1.0, 0.0);
-    tbn.normalWS = TransformObjectToWorldNormal(normalOS);
-    return tbn;
-}
-
 VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
 {
     VertexNormalInputs tbn;
