@@ -193,7 +193,7 @@ Varyings LitPassVertex(Attributes input)
 ```
 
 #### 4.1 vertexInput 顶点输入
-VertexPositionInputs<br>
+**<VertexPositionInputs>** <br>
 顶点空间位置输入结构体，声明了顶点的世界空间位置、观察空间位置、裁剪空间位置，以及（NDC）标准化设备坐标。<br>
 结构体声明位置：Core.hlsl
 ```hlsl
@@ -206,7 +206,7 @@ struct VertexPositionInputs
 };
 ```
 
-GetVertexPositionInputs<br>
+**<GetVertexPositionInputs>** <br>
 获取顶点空间位置数据的函数，使用模型空间的顶点位置计算出世界空间、观察空间、裁剪空间、NDC中的顶点位置。<br>
 函数声明位置：ShaderVariablesFunctions.hlsl
 ```hlsl
@@ -225,7 +225,7 @@ VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
 }
 ```
 #### 4.2 normalInput 法线输入
-VertexNormalInputs<br>
+**<VertexNormalInputs>** <br>
 顶点法线输入结构体，声明了顶点世界空间下的法线、切线、副切线。<br>
 结构体声明位置：Core.hlsl
 ```hlsl
@@ -236,8 +236,8 @@ struct VertexNormalInputs
     float3 normalWS;
 };
 ```
-GetVertexNormalInputs<br>
-获取顶点法线数据的函数，
+**<GetVertexNormalInputs>** <br>
+计算顶点世界空间下的法线、切线、副切线，组成TBN矩阵。<br>
 函数声明位置：ShaderVariablesFunctions.hlsl
 ```hlsl 
 VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
@@ -254,9 +254,8 @@ VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
 ```
 
 #### 4.3 vertexLight 顶点光照
-只有多光源的情况下才输出顶点光，当定义`_ADDITIONAL_LIGHTS_VERTEX`，vertexLight和fogFactor存入output.fogFactorAndVertexLight中。
-
-顶点光函数 VertexLighting<br>
+**<VertexLighting>**<br>
+顶点光函数,只有多光源的情况下才输出顶点光，当定义`_ADDITIONAL_LIGHTS_VERTEX`，vertexLight和fogFactor存入output.fogFactorAndVertexLight中。<br>
 函数声明位置：Lighting.hlsl
 ```hlsl
 half3 VertexLighting(float3 positionWS, half3 normalWS)
