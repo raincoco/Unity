@@ -255,7 +255,7 @@ VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
 
 #### 4.3 vertexLight 顶点光照
 **<VertexLighting>**<br>
-顶点光函数,只有多光源的情况下才输出顶点光，当定义`_ADDITIONAL_LIGHTS_VERTEX`，vertexLight和fogFactor存入output.fogFactorAndVertexLight中。<br>
+顶点光函数，只有多光源的情况下才输出顶点光，当定义`_ADDITIONAL_LIGHTS_VERTEX`，vertexLight和fogFactor存入output.fogFactorAndVertexLight中。<br>
 函数声明位置：Lighting.hlsl
 ```hlsl
 half3 VertexLighting(float3 positionWS, half3 normalWS)
@@ -275,7 +275,7 @@ half3 VertexLighting(float3 positionWS, half3 normalWS)
 }
 ```
 当使用多光源时`_ADDITIONAL_LIGHTS_VERTEX`，fogFactor和顶点光vertexLight存入output.fogFactorAndVertexLight中。
-GetOddNegativeScale函数
+**GetOddNegativeScale>**<br>
 函数声明位置：SpaceTransforms.hlsl
 ```hlsl
 real GetOddNegativeScale()
@@ -286,7 +286,7 @@ real GetOddNegativeScale()
 `unity_WorldTransformParams`声明在`UnityInput.hlsl`中，其w通常为1.0或 -1.0用于奇负尺度变换。
 
 #### 4.4 fogFactor 雾效因子
-如果未定义宏`_FOG_FRAGMENT`，则计算顶点雾效因子。
+当着色器使用宏 _FOG_FRAGMENT 时，雾效将在片元着色器中计算，fogFactor为0；若未使用宏 _FOG_FRAGMENT，则在顶点着色器中计算顶点雾效因子。
 ```hlsl
 half fogFactor = 0;
 #if !defined(_FOG_FRAGMENT)
@@ -317,9 +317,27 @@ real ComputeFogFactor(float zPositionCS)
     return ComputeFogFactorZ0ToFar(clipZ_0Far);
 }
 ```
-当使用多光源时`_ADDITIONAL_LIGHTS_VERTEX`，fogFactor和顶点光vertexLight存入output.fogFactorAndVertexLight中；如未使用多光源，fogFactor存入output.fogFactor。
+如果着色器使用多光源（使用宏_ADDITIONAL_LIGHTS_VERTEX）时，fogFactor 和顶点光 vertexLight 存入 output.fogFactorAndVertexLight 中；<br>
+如果着色器未使用多光源，fogFactor 存入 output.fogFactor。
+```hlsl
+#ifdef _ADDITIONAL_LIGHTS_VERTEX
+    output.fogFactorAndVertexLight = half4(fogFactor, vertexLight);
+#else
+    output.fogFactor = fogFactor;
+#endif
+```
+#### 4.5 TRANSFORM_TEX
+TRANSFORM_TEX 声明在 Macros.hls 中，用于变换2D UV。
+```hlsl
+#define TRANSFORM_TEX(tex, name) ((tex.xy) * name##_ST.xy + name##_ST.zw)
+```
+```hlsl
+output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
+----------------------------等价于------------------------------
+output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
+```
 
-#### 4.5 tangentWS And viewDirTS 世界空间切线和切线空间观察矢量
+#### 4.6 tangentWS And viewDirTS 世界空间切线和切线空间观察矢量
 ```hlsl
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR) || defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
     real sign = input.tangentOS.w * GetOddNegativeScale();
@@ -330,7 +348,7 @@ real ComputeFogFactor(float zPositionCS)
 `REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`表示需要一个切线空间的观察矢量插值器；<br>
 当定义这两个宏任意一个时，会计算世界空间切线tangentWS。
 
-4.5.1 tangentWS
+4.6.1 tangentWS
 ```hlsl
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR)
     output.tangentWS = tangentWS;
@@ -338,7 +356,7 @@ real ComputeFogFactor(float zPositionCS)
 ```
 当定义有`REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR`时，tangentWS会被存入output.tangentWS。
 
-4.5.2 viewDirTS 
+4.6.2 viewDirTS 
 ```hlsl
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
     half3 viewDirWS = GetWorldSpaceNormalizeViewDir(vertexInput.positionWS);
@@ -351,7 +369,7 @@ real ComputeFogFactor(float zPositionCS)
 
 当定义有`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`时，先调用`GetWorldSpaceNormalizeViewDir`计算出世界空间的观察矢量viewDirWS，再调用`GetViewDirectionTangentSpace`计算出viewDirTS 存入output.viewDirTS。
 
-#### 4.6 LIGHTMAP_UV And SH 光照贴图UV和球谐光
+#### 4.7 LIGHTMAP_UV And SH 光照贴图UV和球谐光
 ```hlsl
 OUTPUT_LIGHTMAP_UV(input.staticLightmapUV, unity_LightmapST, output.staticLightmapUV);
 OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
@@ -378,13 +396,13 @@ OUT.xyz = SampleSHVertex(normalWS)
 ```
 球谐光SH采样函数`SampleSHVertex`声明在`GlobalIllumination.hlsl`中。
 
-#### 4.7 DYNAMICLIGHTMAP UV 动态光照贴图UV
+#### 4.8 DYNAMICLIGHTMAP UV 动态光照贴图UV
 ```hlsl
 output.dynamicLightmapUV = input.dynamicLightmapUV.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
 ```
 `unity_DynamicLightmapST`声明在'UnityInput.hlsl'中。
 
-#### 4.8 shadowCoord 阴影纹理
+#### 4.9 shadowCoord 阴影纹理
 GetShadowCoord
 函数声明位置：Shadow.hlsl
 ```hlsl
