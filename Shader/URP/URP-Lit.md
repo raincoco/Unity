@@ -255,7 +255,7 @@ VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
 
 #### 4.3 vertexLight 顶点光照
 **<VertexLighting>**<br>
-顶点光函数，只有多光源的情况下才输出顶点光，当定义`_ADDITIONAL_LIGHTS_VERTEX`，vertexLight和fogFactor存入output.fogFactorAndVertexLight中。<br>
+顶点光函数，计算主灯光外的其他光照，通常不在顶点着色器中计算多光源光照，所有可以不使用vertexLight。
 函数声明位置：Lighting.hlsl
 ```hlsl
 half3 VertexLighting(float3 positionWS, half3 normalWS)
@@ -274,7 +274,7 @@ half3 VertexLighting(float3 positionWS, half3 normalWS)
     return vertexLightColor;
 }
 ```
-当使用多光源时`_ADDITIONAL_LIGHTS_VERTEX`，fogFactor和顶点光vertexLight存入output.fogFactorAndVertexLight中。
+当使用多光源时`_ADDITIONAL_LIGHTS_VERTEX`，fogFactor 和 vertexLight 存入 output.fogFactorAndVertexLight 中。
 **GetOddNegativeScale>**<br>
 函数声明位置：SpaceTransforms.hlsl
 ```hlsl
@@ -340,21 +340,21 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 #### 4.6 tangentWS And viewDirTS 世界空间切线和切线空间观察矢量
 ```hlsl
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR) || defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
-    real sign = input.tangentOS.w * GetOddNegativeScale();
-    half4 tangentWS = half4(normalInput.tangentWS.xyz, sign);
+    real sign = input.tangentOS.w * GetOddNegativeScale();      //获取当前平台的切线方向
+    half4 tangentWS = half4(normalInput.tangentWS.xyz, sign);   //将获取的切线方向存入切线的w通道
 #endif
 ```
-`REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR`表示需要一个世界空间的切线插值器；<br>
-`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`表示需要一个切线空间的观察矢量插值器；<br>
-当定义这两个宏任意一个时，会计算世界空间切线tangentWS。
+`REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR`    表示需要一个世界空间的切线插值器；<br>
+`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR` 表示需要一个切线空间的观察矢量插值器；<br>
+当使用这两个宏中的任意一个时，着色器计算世界空间切线tangentWS。tangentOS.w表用于判断不同平台的切线方向，sign计算了在当前平台切线的方向。
 
-4.6.1 tangentWS
+4.6.1 tangentWS <br>
+当定义有`REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR`时，tangentWS会被存入output.tangentWS。
 ```hlsl
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR)
     output.tangentWS = tangentWS;
 #endif
 ```
-当定义有`REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR`时，tangentWS会被存入output.tangentWS。
 
 4.6.2 viewDirTS 
 ```hlsl
@@ -364,17 +364,18 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
     output.viewDirTS = viewDirTS;
 #endif
 ```
-`GetWorldSpaceNormalizeViewDir`声明在`ShaderVariablesFunctions.hlsl`中。<br>
-`GetViewDirectionTangentSpace`声明在`ParallaxMapping.hlsl`中。<br>
+`GetWorldSpaceNormalizeViewDir`  获得世界空间观察矢量，函数声明在 ShaderVariablesFunctions.hlsl 中。<br>
+`GetViewDirectionTangentSpace`   获得切线空间观察矢量，函数声明在 ParallaxMapping.hlsl 中。<br>
 
-当定义有`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`时，先调用`GetWorldSpaceNormalizeViewDir`计算出世界空间的观察矢量viewDirWS，再调用`GetViewDirectionTangentSpace`计算出viewDirTS 存入output.viewDirTS。
+当定义有 REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR 时，先调用 `GetWorldSpaceNormalizeViewDir` 计算出世界空间的观察矢量viewDirWS，再调用
+ `GetViewDirectionTangentSpace` 计算出 viewDirTS 存入 output.viewDirTS。
 
 #### 4.7 LIGHTMAP_UV And SH 光照贴图UV和球谐光
 ```hlsl
 OUTPUT_LIGHTMAP_UV(input.staticLightmapUV, unity_LightmapST, output.staticLightmapUV);
 OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
 ```
-`OUTPUT_LIGHTMAP_UV`和`OUTPUT_SH`声明在`Lighting.hlsl`中:
+OUTPUT_LIGHTMAP_UV 和 OUTPUT_SH 宏声明在 Lighting.hlsl 中:
 ```hlsl
 #if defined(LIGHTMAP_ON)
     #define DECLARE_LIGHTMAP_OR_SH(lmName, shName, index) float2 lmName : TEXCOORD##index
@@ -386,16 +387,29 @@ OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
     #define OUTPUT_SH(normalWS, OUT) OUT.xyz = SampleSHVertex(normalWS)
 #endif
 ```
-当启用LIGHTMAP时，不计算球谐光SH，LIGHTMAP的UV如下：
+当启用LIGHTMAP时，不计算球谐光SH，OUT输出LIGHTMAP的UV，如下：
 ```hlsl
 OUT.xy = lightmapUV.xy * lightmapScaleOffset.xy + lightmapScaleOffset.zw;
 ```
-当不启用LIGHTMAP时，计算球谐光SH，球谐光SH如下：
+当不启用LIGHTMAP时，计算球谐光SH，OUT输出球谐光SH，如下：
 ```hlsl
 OUT.xyz = SampleSHVertex(normalWS)
 ```
-球谐光SH采样函数`SampleSHVertex`声明在`GlobalIllumination.hlsl`中。
+球谐光SH采样函数`SampleSHVertex`声明在 GlobalIllumination.hlsl 中。当启用宏 EVALUATE_SH_VERTEX 时，使用的是完整的球谐光照，计算了L0L1L2；当启用宏 EVALUATE_SH_MIXED 时，球谐光照仅计算了L2。在启用LIGHTMAP的情况下，球谐光为0。
+```hlsl
+half3 SampleSHVertex(half3 normalWS)
+{
+#if defined(EVALUATE_SH_VERTEX)
+    return SampleSH(normalWS);
+#elif defined(EVALUATE_SH_MIXED)
+    // no max since this is only L2 contribution
+    return SHEvalLinearL2(normalWS, unity_SHBr, unity_SHBg, unity_SHBb, unity_SHC);
+#endif
 
+    // Fully per-pixel. Nothing to compute.
+    return half3(0.0, 0.0, 0.0);
+}
+```
 #### 4.8 DYNAMICLIGHTMAP UV 动态光照贴图UV
 ```hlsl
 output.dynamicLightmapUV = input.dynamicLightmapUV.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
@@ -403,10 +417,17 @@ output.dynamicLightmapUV = input.dynamicLightmapUV.xy * unity_DynamicLightmapST.
 `unity_DynamicLightmapST`声明在'UnityInput.hlsl'中。
 
 #### 4.9 shadowCoord 阴影纹理
-GetShadowCoord
+GetShadowCoord 函数，获取阴影纹理。
 函数声明位置：Shadow.hlsl
 ```hlsl
-output.shadowCoord = GetShadowCoord(vertexInput);
+float4 GetShadowCoord(VertexPositionInputs vertexInput)
+{
+#if defined(_MAIN_LIGHT_SHADOWS_SCREEN) && !defined(_SURFACE_TYPE_TRANSPARENT)
+    return ComputeScreenPos(vertexInput.positionCS);
+#else
+    return TransformWorldToShadowCoord(vertexInput.positionWS);
+#endif
+}
 ```
 
 ### 6、 LitPassFragment片元着色器
