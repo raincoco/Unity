@@ -1,13 +1,13 @@
 # URP-Lit
 Lit Shader是URP管线内置的用于渲染写实效果的光照着色器，该着色器使用URP中计算量最大的着色模型。  
 Lit Shader要正常渲染至少需要保证有ForwardLit、DepthNormals两个Pass，如果要渲染阴影则还需ShadowCaster Pass。
-## 一、ForwardLit Pass
+## 1、ForwardLit Pass
 Lit Shader的前向渲染Pass，控制着色器的渲染的流程，结构和BuildIn着色器的结构是相似的。这个Pass包含了大量的shader_feature与multi_compile变体。  
 
 >shader_feature与multi_compile的区别：  
 两者的区别在于Unity在最终的版本中不会包括shader_feature着色器的未使用的变体。shader_feature更适合处理从material中设置的关键字，而multi_compile则更适合用来处理从全局代码中设置的关键字。
 
-### 1、ForwardLit Pass的结构
+## 2、ForwardLit Pass的结构
 ForwardLit的代码都包含在以下两个hsls文件中，`LitInput.hlsl`定义了Shader所需要的输入数据变量，`LitForwardPass.hlsl`则负责Shader的渲染流程。  
 ```hlsl
 #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
@@ -16,8 +16,8 @@ ForwardLit的代码都包含在以下两个hsls文件中，`LitInput.hlsl`定义
 ForwardLit Pass的结构如下图所示：
 ![LitShader_1](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_01.png)  
 
-### 2、Attributes And Varyings 顶点着色器输入/输出结构体
-#### 2.1 Attributes 顶点着色器输入结构体
+## 3、Attributes And Varyings 顶点着色器输入/输出结构体
+### 3.1 Attributes 顶点着色器输入结构体
 ```hlsl
 struct Attributes
 {
@@ -30,7 +30,7 @@ struct Attributes
     UNITY_VERTEX_INPUT_INSTANCE_ID         // GPU实例化时，顶点属性的索引
 };
 ```
-#### 2.2 Varyings 顶点着色器输出结构体
+### 3.2 Varyings 顶点着色器输出结构体
 ```hlsl
 struct Varyings
 {
@@ -71,7 +71,7 @@ struct Varyings
 };
 ```
 
-### 3、LitInput 输入数据
+## 4、LitInput 输入数据
 `LitInput.hlsl`内声明了外部输入变量，包含由Properties传入的属性参数和纹理贴图、纹理贴图采样函数、Detail细节添加的相关函数，以及用来初始化模型表面数据的初始化函`数InitializeStandardLitSurfaceData`。
 
 `_SPECULAR_SETUP`宏决定着色器使用的工作流，当`_SPECULAR_SETUP`被定义时使用反射流，未被定义时使用金属流。
@@ -129,7 +129,7 @@ half3 ApplyDetailNormal(float2 detailUv, half3 normalTS, half detailMask)  //使
 inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)    //初始化表面基础光照数据
 ```
 
-### 4、 Varyings LitPassVertex 顶点着色器
+## 5、Varyings LitPassVertex 顶点着色器
 ![LitShader_Varyings](https://github.com/raincoco/Unity/blob/main/Shader/URP/MdImages/URP-Lit/LitShader_Varyings.png)
 ```hlsl
 Varyings LitPassVertex(Attributes input)
@@ -192,7 +192,7 @@ Varyings LitPassVertex(Attributes input)
 }
 ```
 
-#### 4.1 vertexInput 顶点输入
+### 5.1 vertexInput 顶点输入
 **<VertexPositionInputs>** <br>
 顶点空间位置输入结构体，声明了顶点的世界空间位置、观察空间位置、裁剪空间位置，以及（NDC）标准化设备坐标。<br>
 结构体声明位置：Core.hlsl
@@ -224,7 +224,7 @@ VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
     return input;
 }
 ```
-#### 4.2 normalInput 法线输入
+### 5.2 normalInput 法线输入
 **<VertexNormalInputs>** <br>
 顶点法线输入结构体，声明了顶点世界空间下的法线、切线、副切线。<br>
 结构体声明位置：Core.hlsl
@@ -253,7 +253,7 @@ VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
 }
 ```
 
-#### 4.3 vertexLight 顶点光照
+### 5.3 vertexLight 顶点光照
 **<VertexLighting>**<br>
 顶点光函数，计算主灯光外的其他光照，通常不在顶点着色器中计算多光源光照，所有可以不使用vertexLight。
 函数声明位置：Lighting.hlsl
@@ -285,7 +285,7 @@ real GetOddNegativeScale()
 ```
 `unity_WorldTransformParams`声明在`UnityInput.hlsl`中，其w通常为1.0或 -1.0用于奇负尺度变换。
 
-#### 4.4 fogFactor 雾效因子
+### 5.4 fogFactor 雾效因子
 当着色器使用宏 _FOG_FRAGMENT 时，雾效将在片元着色器中计算，fogFactor为0；若未使用宏 _FOG_FRAGMENT，则在顶点着色器中计算顶点雾效因子。
 ```hlsl
 half fogFactor = 0;
@@ -326,7 +326,7 @@ real ComputeFogFactor(float zPositionCS)
     output.fogFactor = fogFactor;
 #endif
 ```
-#### 4.5 TRANSFORM_TEX
+### 5.5 TRANSFORM_TEX
 TRANSFORM_TEX 声明在 Macros.hls 中，用于变换2D UV。
 ```hlsl
 #define TRANSFORM_TEX(tex, name) ((tex.xy) * name##_ST.xy + name##_ST.zw)
@@ -337,7 +337,7 @@ output.uv = TRANSFORM_TEX(input.texcoord, _BaseMap);
 output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 ```
 
-#### 4.6 tangentWS And viewDirTS 世界空间切线和切线空间观察矢量
+### 5.6 tangentWS And viewDirTS 世界空间切线和切线空间观察矢量
 ```hlsl
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR) || defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
     real sign = input.tangentOS.w * GetOddNegativeScale();      //获取当前平台的切线方向
@@ -370,7 +370,7 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 需要切线空间观察矢量时，先调用 `GetWorldSpaceNormalizeViewDir` 计算出世界空间的观察矢量viewDirWS，再调用
  `GetViewDirectionTangentSpace` 计算出 viewDirTS 存入 output.viewDirTS。
 
-#### 4.7 LIGHTMAP_UV And SH 光照贴图UV和球谐光
+### 5.7 LIGHTMAP_UV And SH 光照贴图UV和球谐光
 ```hlsl
 OUTPUT_LIGHTMAP_UV(input.staticLightmapUV, unity_LightmapST, output.staticLightmapUV);
 OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
@@ -410,13 +410,13 @@ half3 SampleSHVertex(half3 normalWS)
     return half3(0.0, 0.0, 0.0);
 }
 ```
-#### 4.8 DYNAMICLIGHTMAP UV 动态光照贴图UV
+### 5.8 DYNAMICLIGHTMAP UV 动态光照贴图UV
 ```hlsl
 output.dynamicLightmapUV = input.dynamicLightmapUV.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
 ```
 `unity_DynamicLightmapST`声明在'UnityInput.hlsl'中。
 
-#### 4.9 shadowCoord 阴影纹理
+### 5.9 shadowCoord 阴影纹理
 GetShadowCoord 函数，获取阴影纹理坐标。
 函数声明位置：Shadow.hlsl
 ```hlsl
@@ -430,7 +430,7 @@ float4 GetShadowCoord(VertexPositionInputs vertexInput)
 }
 ```
 
-### 6、 LitPassFragment片元着色器
+## 6、LitPassFragment片元着色器
 ```hlsl
 half4 LitPassFragment(Varyings input) : SV_Target
 {
@@ -467,11 +467,11 @@ half4 LitPassFragment(Varyings input) : SV_Target
 }
 ```
 
-#### 6.1 UNITY_SETUP_INSTANCE_ID 实例化ID
+### 6.1 UNITY_SETUP_INSTANCE_ID 实例化ID
 UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETUP_INSTANCE_ID(input)可以用来访问全局unity_InstanceID，需放在顶点和片元着色器起始第一行。
 如果需要将实例化ID传到片段着色器，则需在顶点着色器中增加UNITY_TRANSFER_INSTANCE_ID(v, o);
 
-#### 6.2 viewDir 观察矢量
+### 6.2 viewDir 观察矢量
 ```hlsl
 //世界空间观察矢量
     half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);    
@@ -521,7 +521,7 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
     return viewDirTS;
 }
 ```
-#### 6.3 PARALLAXMA 视差图
+### 6.3 PARALLAXMA 视差图
 ```hlsl
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)  
@@ -560,7 +560,7 @@ half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 }
 ```
 
-#### 6.4 初始化表面数据
+### 6.4 初始化表面数据
 初始化模型表面数据和外部输入数据。
 ```hlsl
 SurfaceData surfaceData;
@@ -622,7 +622,7 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
 #endif
 }
 ```
-#### 6.5 初始化输入数据
+### 6.5 初始化输入数据
 InputData 结构体声明在 Input.hlsl 中，声明模型的空间信息和其他输入变量，如下。
 ```hlsl
 struct InputData
@@ -738,5 +738,155 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 }
 ```
 
-#### 6.6 InitializeStandardLitSurfaceData
+### 6.6 PBR光照计算 
+Lit的PBR光照计算由函数 UniversalFragmentPBR 完成，该函数声明在 Lighting.hlsl 中，如下：
+```hlsl
+half4 UniversalFragmentPBR(InputData inputData, SurfaceData surfaceData)
+{
+    #if defined(_SPECULARHIGHLIGHTS_OFF)
+    bool specularHighlightsOff = true;
+    #else
+    bool specularHighlightsOff = false;
+    #endif
 
+    //BRDF相关数据初始化
+    BRDFData brdfData;
+    InitializeBRDFData(surfaceData, brdfData);
+
+    #if defined(DEBUG_DISPLAY)
+    half4 debugColor;
+
+    if (CanDebugOverrideOutputColor(inputData, surfaceData, brdfData, debugColor))
+    {
+        return debugColor;
+    }
+    #endif
+
+    // Clear-coat calculation...
+    BRDFData brdfDataClearCoat = CreateClearCoatBRDFData(surfaceData, brdfData);
+    half4 shadowMask = CalculateShadowMask(inputData);
+    AmbientOcclusionFactor aoFactor = CreateAmbientOcclusionFactor(inputData, surfaceData);
+    uint meshRenderingLayers = GetMeshRenderingLightLayer();
+    Light mainLight = GetMainLight(inputData, shadowMask, aoFactor);
+
+    // NOTE: We don't apply AO to the GI here because it's done in the lighting calculation below...
+    MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI);
+
+    LightingData lightingData = CreateLightingData(inputData, surfaceData);
+
+    lightingData.giColor = GlobalIllumination(brdfData, brdfDataClearCoat, surfaceData.clearCoatMask,
+                                              inputData.bakedGI, aoFactor.indirectAmbientOcclusion, inputData.positionWS,
+                                              inputData.normalWS, inputData.viewDirectionWS);
+
+    if (IsMatchingLightLayer(mainLight.layerMask, meshRenderingLayers))
+    {
+        lightingData.mainLightColor = LightingPhysicallyBased(brdfData, brdfDataClearCoat,
+                                                              mainLight,
+                                                              inputData.normalWS, inputData.viewDirectionWS,
+                                                              surfaceData.clearCoatMask, specularHighlightsOff);
+    }
+
+    //获取多光源灯光数量
+    #if defined(_ADDITIONAL_LIGHTS)
+    uint pixelLightCount = GetAdditionalLightsCount();
+
+    #if USE_CLUSTERED_LIGHTING
+    for (uint lightIndex = 0; lightIndex < min(_AdditionalLightsDirectionalCount, MAX_VISIBLE_LIGHTS); lightIndex++)
+    {
+        Light light = GetAdditionalLight(lightIndex, inputData, shadowMask, aoFactor);
+
+        if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
+        {
+            lightingData.additionalLightsColor += LightingPhysicallyBased(brdfData, brdfDataClearCoat, light,
+                                                                          inputData.normalWS, inputData.viewDirectionWS,
+                                                                          surfaceData.clearCoatMask, specularHighlightsOff);
+        }
+    }
+    #endif
+
+    //计算多光源时的其他光照
+    LIGHT_LOOP_BEGIN(pixelLightCount)
+        Light light = GetAdditionalLight(lightIndex, inputData, shadowMask, aoFactor);
+
+        if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
+        {
+            lightingData.additionalLightsColor += LightingPhysicallyBased(brdfData, brdfDataClearCoat, light,
+                                                                          inputData.normalWS, inputData.viewDirectionWS,
+                                                                          surfaceData.clearCoatMask, specularHighlightsOff);
+        }
+    LIGHT_LOOP_END
+    #endif
+
+    #if defined(_ADDITIONAL_LIGHTS_VERTEX)
+    lightingData.vertexLightingColor += inputData.vertexLighting * brdfData.diffuse;
+    #endif
+
+    return CalculateFinalColor(lightingData, surfaceData.alpha);
+}
+
+half4 UniversalFragmentPBR(InputData inputData, half3 albedo, half metallic, half3 specular,
+    half smoothness, half occlusion, half3 emission, half alpha)
+{
+    SurfaceData surfaceData;
+
+    surfaceData.albedo = albedo;
+    surfaceData.specular = specular;
+    surfaceData.metallic = metallic;
+    surfaceData.smoothness = smoothness;
+    surfaceData.normalTS = half3(0, 0, 1);
+    surfaceData.emission = emission;
+    surfaceData.occlusion = occlusion;
+    surfaceData.alpha = alpha;
+    surfaceData.clearCoatMask = 0;
+    surfaceData.clearCoatSmoothness = 1;
+
+    return UniversalFragmentPBR(inputData, surfaceData);
+}
+```
+
+### 6.6.1 BRDF相关数据初始化
+BRDF相关数据由 InitializeBRDFData 函数和 InitializeBRDFDataDirect 函数完成初始化计算，这两个函数声明在 BRDF.hlsl 中，如下：
+```hlsl
+inline void InitializeBRDFDataDirect(half3 albedo, half3 diffuse, half3 specular, half reflectivity, half oneMinusReflectivity, half smoothness, inout half alpha, out BRDFData outBRDFData)
+{
+    outBRDFData = (BRDFData)0;
+    outBRDFData.albedo = albedo;
+    outBRDFData.diffuse = diffuse;
+    outBRDFData.specular = specular;
+    outBRDFData.reflectivity = reflectivity;
+
+    outBRDFData.perceptualRoughness = PerceptualSmoothnessToPerceptualRoughness(smoothness);
+    outBRDFData.roughness           = max(PerceptualRoughnessToRoughness(outBRDFData.perceptualRoughness), HALF_MIN_SQRT);
+    outBRDFData.roughness2          = max(outBRDFData.roughness * outBRDFData.roughness, HALF_MIN);
+    outBRDFData.grazingTerm         = saturate(smoothness + reflectivity);
+    outBRDFData.normalizationTerm   = outBRDFData.roughness * half(4.0) + half(2.0);
+    outBRDFData.roughness2MinusOne  = outBRDFData.roughness2 - half(1.0);
+
+#ifdef _ALPHAPREMULTIPLY_ON
+    outBRDFData.diffuse *= alpha;
+    alpha = alpha * oneMinusReflectivity + reflectivity; // NOTE: alpha modified and propagated up.
+#endif
+}
+
+inline void InitializeBRDFData(half3 albedo, half metallic, half3 specular, half smoothness, inout half alpha, out BRDFData outBRDFData)
+{
+#ifdef _SPECULAR_SETUP
+    half reflectivity = ReflectivitySpecular(specular);
+    half oneMinusReflectivity = half(1.0) - reflectivity;
+    half3 brdfDiffuse = albedo * oneMinusReflectivity;
+    half3 brdfSpecular = specular;
+#else
+    half oneMinusReflectivity = OneMinusReflectivityMetallic(metallic);
+    half reflectivity = half(1.0) - oneMinusReflectivity;
+    half3 brdfDiffuse = albedo * oneMinusReflectivity;
+    half3 brdfSpecular = lerp(kDieletricSpec.rgb, albedo, metallic);
+#endif
+
+    InitializeBRDFDataDirect(albedo, brdfDiffuse, brdfSpecular, reflectivity, oneMinusReflectivity, smoothness, alpha, outBRDFData);
+}
+
+inline void InitializeBRDFData(inout SurfaceData surfaceData, out BRDFData brdfData)
+{
+    InitializeBRDFData(surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.alpha, brdfData);
+}
+```
