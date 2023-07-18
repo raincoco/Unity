@@ -349,7 +349,7 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 当使用这两个宏中的任意一个时，着色器计算世界空间切线tangentWS。tangentOS.w表用于判断不同平台的切线方向，sign计算了在当前平台切线的方向。
 
 4.6.1 tangentWS <br>
-当定义有`REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR`时，tangentWS会被存入output.tangentWS。
+需要世界空间切线时，将tangentWS存入output.tangentWS。
 ```hlsl
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR)
     output.tangentWS = tangentWS;
@@ -367,7 +367,7 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 `GetWorldSpaceNormalizeViewDir`  获得世界空间观察矢量，函数声明在 ShaderVariablesFunctions.hlsl 中。<br>
 `GetViewDirectionTangentSpace`   获得切线空间观察矢量，函数声明在 ParallaxMapping.hlsl 中。<br>
 
-当定义有 REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR 时，先调用 `GetWorldSpaceNormalizeViewDir` 计算出世界空间的观察矢量viewDirWS，再调用
+需要切线空间观察矢量时，先调用 `GetWorldSpaceNormalizeViewDir` 计算出世界空间的观察矢量viewDirWS，再调用
  `GetViewDirectionTangentSpace` 计算出 viewDirTS 存入 output.viewDirTS。
 
 #### 4.7 LIGHTMAP_UV And SH 光照贴图UV和球谐光
@@ -417,7 +417,7 @@ output.dynamicLightmapUV = input.dynamicLightmapUV.xy * unity_DynamicLightmapST.
 `unity_DynamicLightmapST`声明在'UnityInput.hlsl'中。
 
 #### 4.9 shadowCoord 阴影纹理
-GetShadowCoord 函数，获取阴影纹理。
+GetShadowCoord 函数，获取阴影纹理坐标。
 函数声明位置：Shadow.hlsl
 ```hlsl
 float4 GetShadowCoord(VertexPositionInputs vertexInput)
@@ -471,7 +471,57 @@ half4 LitPassFragment(Varyings input) : SV_Target
 UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETUP_INSTANCE_ID(input)可以用来访问全局unity_InstanceID，需放在顶点和片元着色器起始第一行。
 如果需要将实例化ID传到片段着色器，则需在顶点着色器中增加UNITY_TRANSFER_INSTANCE_ID(v, o);
 
-#### 6.2 PARALLAXMA 视差图
+#### 6.2 viewDir 观察矢量
+```hlsl
+//世界空间观察矢量
+    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);    
+//切线空间观察矢量
+    half3 viewDirTS = GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, viewDirWS);
+```
+计算世界空间观察矢量的的函数`GetWorldSpaceNormalizeViewDir`定义在 ShaderVariablesFunctions.hlsl 中。
+```hlsl
+float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
+{
+    if (IsPerspectiveProjection())
+    {
+        // Perspective 透视空间
+        float3 V = GetCurrentViewPosition() - positionWS;
+        return normalize(V);
+    }
+    else
+    {
+        // Orthographic 正交空间
+        return -GetViewForwardDir();
+    }
+}
+```
+计算切线空间观察矢量的的函数`GetViewDirectionTangentSpace`定义在 ParallaxMapping.hlsl 中。
+```hlsl
+half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDirWS)
+{
+    // must use interpolated tangent, bitangent and normal before they are normalized in the pixel shader.
+    half3 unnormalizedNormalWS = normalWS;
+    const half renormFactor = 1.0 / length(unnormalizedNormalWS);
+
+    // use bitangent on the fly like in hdrp
+    // IMPORTANT! If we ever support Flip on double sided materials ensure bitangent and tangent are NOT flipped.
+    half crossSign = (tangentWS.w > 0.0 ? 1.0 : -1.0); // we do not need to multiple GetOddNegativeScale() here, as it is done in vertex shader
+    half3 bitang = crossSign * cross(normalWS.xyz, tangentWS.xyz);
+
+    half3 WorldSpaceNormal = renormFactor * normalWS.xyz;       // we want a unit length Normal Vector node in shader graph
+
+    // to preserve mikktspace compliance we use same scale renormFactor as was used on the normal.
+    // This is explained in section 2.2 in "surface gradient based bump mapping framework"
+    half3 WorldSpaceTangent = renormFactor * tangentWS.xyz;
+    half3 WorldSpaceBiTangent = renormFactor * bitang;
+
+    half3x3 tangentSpaceTransform = half3x3(WorldSpaceTangent, WorldSpaceBiTangent, WorldSpaceNormal);
+    half3 viewDirTS = mul(tangentSpaceTransform, viewDirWS);
+
+    return viewDirTS;
+}
+```
+#### 6.3 PARALLAXMA 视差图
 ```hlsl
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)  
@@ -483,7 +533,7 @@ UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETU
     ApplyPerPixelDisplacement(viewDirTS, input.uv);
 #endif
 ```
-URP预设宏_PARALLAXMAP来进行视差映射，其中ApplyPerPixelDisplacement负责计算视差图，如下。
+URP预设宏 _PARALLAXMAP 来进行视差映射，其中 ApplyPerPixelDisplacement负 责计算视差图，如下。
 ```hlsl
 void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 {
@@ -510,18 +560,13 @@ half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 }
 ```
 
-#### 6.3 数据初始化
+#### 6.4 初始化表面数据
 初始化模型表面数据和外部输入数据。
 ```hlsl
 SurfaceData surfaceData;
 InitializeStandardLitSurfaceData(input.uv, surfaceData);
-
-InputData inputData;
-InitializeInputData(input, surfaceData.normalTS, inputData);
 ```
-##### 6.3.1 初始化表面数据
-SurfaceData声明在SurfaceData.hlsl中，如下。
-
+SurfaceData 结构体声明在 SurfaceData.hlsl 中，声明模型如基础色、金属度、法线等基础表面信息变量，如下。
 ```hlsl
 struct SurfaceData
 {
@@ -537,7 +582,7 @@ struct SurfaceData
     half  clearCoatSmoothness;
 };
 ```
-InitializeStandardLitSurfaceData声明在LitInput.hlsl中，如下。
+InitializeStandardLitSurfaceData 初始化模型表面的数据信息，声明在 LitInput.hlsl 中，如下。
 ```hlsl
 inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)
 {
@@ -577,8 +622,8 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
 #endif
 }
 ```
-##### 6.3.2 初始化输入数据
-InputData声明在Input.hlsl中，如下。
+#### 6.5 初始化输入数据
+InputData 结构体声明在 Input.hlsl 中，声明模型的空间信息和其他输入变量，如下。
 ```hlsl
 struct InputData
 {
@@ -620,7 +665,7 @@ struct InputData
     #endif
 };
 ```
-InitializeInputData声明在LitForwardPass.hlsl中，如下。
+InitializeInputData 函数声明在 LitForwardPass.hlsl 中，声明模型的空间信息和其他输入变量，如下。
 ```hlsl
 void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData)
 {
@@ -631,6 +676,8 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 #endif
 
     half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+
+//TBN矩阵（切线空间转换到模型空间矩阵）
 #if defined(_NORMALMAP) || defined(_DETAIL)
     float sgn = input.tangentWS.w;      // should be either +1 or -1
     float3 bitangent = sgn * cross(input.normalWS.xyz, input.tangentWS.xyz);
@@ -639,14 +686,18 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
     #if defined(_NORMALMAP)
     inputData.tangentToWorld = tangentToWorld;
     #endif
+    //法线图法线转换（切线到世界空间）
     inputData.normalWS = TransformTangentToWorld(normalTS, tangentToWorld);
 #else
     inputData.normalWS = input.normalWS;
 #endif
 
+    //Normalize世界法线
     inputData.normalWS = NormalizeNormalPerPixel(inputData.normalWS);
+    //世界空间观察矢量
     inputData.viewDirectionWS = viewDirWS;
 
+//阴影坐标
 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
     inputData.shadowCoord = input.shadowCoord;
 #elif defined(MAIN_LIGHT_CALCULATE_SHADOWS)
@@ -654,6 +705,8 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 #else
     inputData.shadowCoord = float4(0, 0, 0, 0);
 #endif
+
+//多光源时的Fog坐标和顶点光
 #ifdef _ADDITIONAL_LIGHTS_VERTEX
     inputData.fogCoord = InitializeInputDataFog(float4(input.positionWS, 1.0), input.fogFactorAndVertexLight.x);
     inputData.vertexLighting = input.fogFactorAndVertexLight.yzw;
@@ -661,12 +714,14 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
     inputData.fogCoord = InitializeInputDataFog(float4(input.positionWS, 1.0), input.fogFactor);
 #endif
 
+//光照烘焙
 #if defined(DYNAMICLIGHTMAP_ON)
     inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.dynamicLightmapUV, input.vertexSH, inputData.normalWS);
 #else
     inputData.bakedGI = SAMPLE_GI(input.staticLightmapUV, input.vertexSH, inputData.normalWS);
 #endif
 
+    //屏幕空间UV（normalize）
     inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
     inputData.shadowMask = SAMPLE_SHADOWMASK(input.staticLightmapUV);
 
@@ -683,5 +738,5 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 }
 ```
 
-##### 6.3.3 InitializeStandardLitSurfaceData
+#### 6.6 InitializeStandardLitSurfaceData
 
