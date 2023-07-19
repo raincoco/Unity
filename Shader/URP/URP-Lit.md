@@ -582,7 +582,7 @@ struct SurfaceData
     half  clearCoatSmoothness;
 };
 ```
-InitializeStandardLitSurfaceData 初始化模型表面的数据信息，声明在 LitInput.hlsl 中，如下。
+InitializeStandardLitSurfaceData 初始化模型表面的数据信息，定义在 LitInput.hlsl 中，如下。
 ```hlsl
 inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfaceData)
 {
@@ -623,7 +623,7 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
 }
 ```
 ### 6.5 初始化输入数据
-InputData 结构体声明在 Input.hlsl 中，声明模型的空间信息和其他输入变量，如下。
+InputData 结构体定义在 Input.hlsl 中，定义模型的空间信息和其他输入变量，如下。
 ```hlsl
 struct InputData
 {
@@ -665,7 +665,7 @@ struct InputData
     #endif
 };
 ```
-InitializeInputData 函数声明在 LitForwardPass.hlsl 中，声明模型的空间信息和其他输入变量，如下。
+InitializeInputData 函数定义在 LitForwardPass.hlsl 中，声明模型的空间信息和其他输入变量，如下。
 ```hlsl
 void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData)
 {
@@ -739,7 +739,7 @@ void InitializeInputData(Varyings input, half3 normalTS, out InputData inputData
 ```
 
 ### 6.6 PBR光照计算 
-Lit的PBR光照计算由函数 UniversalFragmentPBR 完成，该函数声明在 Lighting.hlsl 中，如下：
+Lit的PBR光照计算由函数 UniversalFragmentPBR 完成，该函数定义在 Lighting.hlsl 中，如下：
 ```hlsl
 half4 UniversalFragmentPBR(InputData inputData, SurfaceData surfaceData)
 {
@@ -845,7 +845,7 @@ half4 UniversalFragmentPBR(InputData inputData, half3 albedo, half metallic, hal
 ```
 
 ### 6.6.1 BRDF相关数据初始化
-BRDF相关数据由 InitializeBRDFData 函数和 InitializeBRDFDataDirect 函数完成初始化计算，这两个函数声明在 BRDF.hlsl 中，如下：
+BRDF相关数据由 InitializeBRDFData 函数和 InitializeBRDFDataDirect 函数完成初始化计算，这两个函数定义在 BRDF.hlsl 中，如下：
 ```hlsl
 inline void InitializeBRDFDataDirect(half3 albedo, half3 diffuse, half3 specular, half reflectivity, half oneMinusReflectivity, half smoothness, inout half alpha, out BRDFData outBRDFData)
 {
@@ -888,5 +888,66 @@ inline void InitializeBRDFData(half3 albedo, half metallic, half3 specular, half
 inline void InitializeBRDFData(inout SurfaceData surfaceData, out BRDFData brdfData)
 {
     InitializeBRDFData(surfaceData.albedo, surfaceData.metallic, surfaceData.specular, surfaceData.smoothness, surfaceData.alpha, brdfData);
+}
+```
+### 6.6.2 主灯光数据
+结构体 Light 定义了灯光的四个参数，GetMainLight 函数用于获取主灯光数据，该函数定义在 Realtimelights.hlsl 中，如下：
+```hlsl
+struct Light
+{
+    half3   direction;            // 灯光方向
+    half3   color;                // 灯光颜色
+    half    distanceAttenuation;  // 距离衰减
+    half    shadowAttenuation;    // 阴影衰减
+    uint    layerMask;
+};
+
+Light GetMainLight()
+{
+    Light light;
+    light.direction = half3(_MainLightPosition.xyz); // 灯光方向
+#if USE_CLUSTERED_LIGHTING
+    light.distanceAttenuation = 1.0;                 // 灯光阴影衰减
+#else
+    light.distanceAttenuation = unity_LightData.z;   // 灯光距离衰减。当没有被剔除掩码剔除时，unity_LightData.z 为 1，否则为 0。
+#endif
+    light.shadowAttenuation = 1.0;
+    light.color = _MainLightColor.rgb;               // 灯光颜色
+
+#ifdef _LIGHT_LAYERS
+    light.layerMask = _MainLightLayerMask;
+#else
+    light.layerMask = DEFAULT_LIGHT_LAYERS;
+#endif
+
+    return light;
+}
+
+Light GetMainLight(float4 shadowCoord, float3 positionWS, half4 shadowMask)
+{
+    Light light = GetMainLight();
+    // MainLightShadow 混合实时光照和烘焙阴影
+    light.shadowAttenuation = MainLightShadow(shadowCoord, positionWS, shadowMask, _MainLightOcclusionProbes); 
+
+    #if defined(_LIGHT_COOKIES)
+        real3 cookieColor = SampleMainLightCookie(positionWS);
+        light.color *= cookieColor;
+    #endif
+
+    return light;
+}
+
+Light GetMainLight(InputData inputData, half4 shadowMask, AmbientOcclusionFactor aoFactor)
+{
+    Light light = GetMainLight(inputData.shadowCoord, inputData.positionWS, shadowMask);
+
+    #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
+    if (IsLightingFeatureEnabled(DEBUGLIGHTINGFEATUREFLAGS_AMBIENT_OCCLUSION))
+    {
+        light.color *= aoFactor.directAmbientOcclusion;
+    }
+    #endif
+
+    return light;
 }
 ```
