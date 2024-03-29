@@ -11,7 +11,7 @@ Validate.hlsl
 Vulkan.hlsl
 ```
 常用的TEXTURE2D定义：
-```HLSL
+``` hlsl
 #define TEXTURE2D(textureName)                         Texture2D textureName
 #define TEXTURECUBE(textureName)                       TextureCube textureName
 
