@@ -431,36 +431,45 @@ float4 GetShadowCoord(VertexPositionInputs vertexInput)
 ```
 
 ## 6、LitPassFragment片元着色器
+LitForwardPass.hlsl内Lit.shader片元着色器代码：
 ```hlsl
 half4 LitPassFragment(Varyings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input); //XR项目使用
 
-#if defined(_PARALLAXMAP)
-#if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
-    half3 viewDirTS = input.viewDirTS;
-#else
-    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
-    half3 viewDirTS = GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, viewDirWS);
-#endif
-    ApplyPerPixelDisplacement(viewDirTS, input.uv);
-#endif
+    //视差图计算
+    #if defined(_PARALLAXMAP)
+    #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
+        half3 viewDirTS = input.viewDirTS;
+    #else
+        half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+        half3 viewDirTS = GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, viewDirWS);
+    #endif
+        ApplyPerPixelDisplacement(viewDirTS, input.uv);
+    #endif
 
+    //初始化渲染表面的数据
     SurfaceData surfaceData;
     InitializeStandardLitSurfaceData(input.uv, surfaceData);
 
+    //初始化空间位置和矢量数据
     InputData inputData;
     InitializeInputData(input, surfaceData.normalTS, inputData);
+    //设置测试贴图数据(官方Debug的宏)
     SETUP_DEBUG_TEXTURE_DATA(inputData, input.uv, _BaseMap);
 
-#ifdef _DBUFFER
-    ApplyDecalToSurfaceData(input.positionCS, surfaceData, inputData);
-#endif
+    //URP的贴花系统
+    #ifdef _DBUFFER
+        ApplyDecalToSurfaceData(input.positionCS, surfaceData, inputData);
+    #endif
 
+    //PBR渲染
     half4 color = UniversalFragmentPBR(inputData, surfaceData);
 
+    //混合雾效
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
+    //输出Alpha
     color.a = OutputAlpha(color.a, _Surface);
 
     return color;
@@ -468,17 +477,27 @@ half4 LitPassFragment(Varyings input) : SV_Target
 ```
 
 ### 6.1 UNITY_SETUP_INSTANCE_ID 实例化ID
-UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETUP_INSTANCE_ID(input)可以用来访问全局unity_InstanceID，需放在顶点和片元着色器起始第一行。
+UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETUP_INSTANCE_ID(input)可以用来访问全局unity_InstanceID，需放在顶点和片元着色器起始第一行。<br>
 如果需要将实例化ID传到片段着色器，则需在顶点着色器中增加UNITY_TRANSFER_INSTANCE_ID(v, o);
 
 ### 6.2 viewDir 观察矢量
+如果要计算视差，则需要计算切线空间的观察向量viewDirTS。
 ```hlsl
-//世界空间观察矢量
-    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);    
-//切线空间观察矢量
+#if defined(_PARALLAXMAP)
+#if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
+    half3 viewDirTS = input.viewDirTS;
+#else
+    //世界空间观察矢量
+    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+    //切线空间观察矢量
     half3 viewDirTS = GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, viewDirWS);
+#endif
+    ApplyPerPixelDisplacement(viewDirTS, input.uv);
+#endif
 ```
-计算世界空间观察矢量的的函数`GetWorldSpaceNormalizeViewDir`定义在 ShaderVariablesFunctions.hlsl 中。
+1）世界空间观察矢量viewDirWS
+`GetWorldSpaceNormalizeViewDir`计算viewDirWS，该函数定义在：<br>
+\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\ShaderLibrary\ShaderVariablesFunctions.hlsl
 ```hlsl
 float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
 {
@@ -495,7 +514,9 @@ float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
     }
 }
 ```
-计算切线空间观察矢量的的函数`GetViewDirectionTangentSpace`定义在 ParallaxMapping.hlsl 中。
+2）切线空间观察矢量viewDirTS
+`GetViewDirectionTangentSpace`计算viewDirTS，该函数定义在：<br>
+\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
 half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDirWS)
 {
@@ -533,7 +554,8 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
     ApplyPerPixelDisplacement(viewDirTS, input.uv);
 #endif
 ```
-URP预设宏 _PARALLAXMAP 来进行视差映射，其中 ApplyPerPixelDisplacement负 责计算视差图，如下。
+URP预设宏`_PARALLAXMAP`启用视差映射，用`ApplyPerPixelDisplacement`函数计算视差图，该函数定义在：<br>
+\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
 ```hlsl
 void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 {
@@ -542,6 +564,7 @@ void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 #endif
 }
 ```
+`ParallaxMapping`定义在：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
 float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 viewDirTS, half scale, float2 uv)
 {
@@ -550,6 +573,7 @@ float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 view
     return offset;
 }
 ```
+`ParallaxOffset1Step`定义在：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
 half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 {
