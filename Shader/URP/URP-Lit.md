@@ -481,7 +481,6 @@ UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETU
 如果需要将实例化ID传到片段着色器，则需在顶点着色器中增加UNITY_TRANSFER_INSTANCE_ID(v, o);
 
 ### 6.2 viewDir 观察矢量
-如果要计算视差，则需要计算切线空间的观察向量viewDirTS。
 ```hlsl
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
@@ -495,7 +494,14 @@ UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETU
     ApplyPerPixelDisplacement(viewDirTS, input.uv);
 #endif
 ```
-1）世界空间观察矢量viewDirWS
+在声明`_PARALLAXMAP`启用视差图的情况下，根据`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`选择是否需要计算切线空间的观察向量。<br>
+`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`声明：
+```hlsl
+#if defined(_PARALLAXMAP) && !defined(SHADER_API_GLES)
+#define REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR
+#endif
+```
+1）计算世界空间观察矢量viewDirWS
 `GetWorldSpaceNormalizeViewDir`计算viewDirWS，该函数定义在：<br>
 \Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\ShaderLibrary\ShaderVariablesFunctions.hlsl
 ```hlsl
@@ -514,7 +520,7 @@ float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
     }
 }
 ```
-2）切线空间观察矢量viewDirTS
+2）计算切线空间观察矢量viewDirTS
 `GetViewDirectionTangentSpace`计算viewDirTS，该函数定义在：<br>
 \Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
@@ -542,7 +548,7 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
     return viewDirTS;
 }
 ```
-### 6.3 PARALLAXMA 视差图
+### 6.3 PARALLAXMAP 视差图
 ```hlsl
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)  
@@ -554,8 +560,9 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
     ApplyPerPixelDisplacement(viewDirTS, input.uv);
 #endif
 ```
-URP预设宏`_PARALLAXMAP`启用视差映射，用`ApplyPerPixelDisplacement`函数计算视差图，该函数定义在：<br>
-\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
+URP预设宏`_PARALLAXMAP`启用视差映射，用`ApplyPerPixelDisplacement`函数计算视差图。<br>
+* `ApplyPerPixelDisplacement`函数定义：<br>
+函数位置：\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
 ```hlsl
 void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 {
@@ -564,7 +571,8 @@ void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 #endif
 }
 ```
-`ParallaxMapping`定义在：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+* `ParallaxMapping`函数定义：<br>
+函数位置：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
 float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 viewDirTS, half scale, float2 uv)
 {
@@ -573,7 +581,9 @@ float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 view
     return offset;
 }
 ```
-`ParallaxOffset1Step`定义在：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+* `ParallaxOffset1Step`函数：<br>
+Unity使用的最简单的ParallaxMapping算法。<br>
+函数位置：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
 half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 {
