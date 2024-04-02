@@ -501,8 +501,8 @@ UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETU
 #define REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR
 #endif
 ```
-1）计算世界空间观察矢量viewDirWS
-`GetWorldSpaceNormalizeViewDir`计算viewDirWS，该函数定义在：<br>
+1）GetWorldSpaceNormalizeViewDir 计算世界空间观察矢量 
+`GetWorldSpaceNormalizeViewDir`函数位置：
 \Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\ShaderLibrary\ShaderVariablesFunctions.hlsl
 ```hlsl
 float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
@@ -520,8 +520,8 @@ float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
     }
 }
 ```
-2）计算切线空间观察矢量viewDirTS
-`GetViewDirectionTangentSpace`计算viewDirTS，该函数定义在：<br>
+2）GetViewDirectionTangentSpace 计算切线空间观察矢量
+`GetViewDirectionTangentSpace`函数位置：
 \Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
 half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDirWS)
@@ -561,7 +561,7 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
 #endif
 ```
 URP预设宏`_PARALLAXMAP`启用视差映射，用`ApplyPerPixelDisplacement`函数计算视差图。<br>
-* `ApplyPerPixelDisplacement`函数定义：<br>
+* `ApplyPerPixelDisplacement`<br>
 函数位置：\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
 ```hlsl
 void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
@@ -571,7 +571,7 @@ void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 #endif
 }
 ```
-* `ParallaxMapping`函数定义：<br>
+* `ParallaxMapping`<br>
 函数位置：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
 float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 viewDirTS, half scale, float2 uv)
@@ -581,7 +581,7 @@ float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 view
     return offset;
 }
 ```
-* `ParallaxOffset1Step`函数：<br>
+* `ParallaxOffset1Step`<br>
 Unity使用的最简单的ParallaxMapping算法。<br>
 函数位置：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 ```hlsl
