@@ -225,10 +225,12 @@ VertexPositionInputs GetVertexPositionInputs(float3 positionOS)
 }
 ```
 ### 5.2 normalInput 法线输入
-**<VertexNormalInputs>** <br>
-顶点法线输入结构体，声明了顶点世界空间下的法线、切线、副切线。<br>
-结构体声明位置：Core.hlsl
+**（1）VertexNormalInputs**<br>
+顶点法线输入结构体，声明顶点在世界空间中的法线、切线、副切线。<br>
 ```hlsl
+//------------------------------------------------------------------------------------------
+// \Library\PackageCache\com.unity.render-pipelines.universal@14.0.9\ShaderLibrary\Core.hlsl
+//------------------------------------------------------------------------------------------
 struct VertexNormalInputs
 {
     real3 tangentWS;
@@ -236,10 +238,12 @@ struct VertexNormalInputs
     float3 normalWS;
 };
 ```
-**<GetVertexNormalInputs>** <br>
-计算顶点世界空间下的法线、切线、副切线，组成TBN矩阵。<br>
-函数声明位置：ShaderVariablesFunctions.hlsl
-```hlsl 
+**（2）GetVertexNormalInputs** <br>
+计算顶点在世界空间中的法线、切线、副切线，组成TBN矩阵。<br>
+```hlsl
+//--------------------------------------------------------------------------------------------------------------
+// \Library\PackageCache\com.unity.render-pipelines.universal@14.0.9\ShaderLibrary\ShaderVariablesFunctions.hlsl
+//--------------------------------------------------------------------------------------------------------------
 VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
 {
     VertexNormalInputs tbn;
@@ -254,10 +258,12 @@ VertexNormalInputs GetVertexNormalInputs(float3 normalOS, float4 tangentOS)
 ```
 
 ### 5.3 vertexLight 顶点光照
-**<VertexLighting>**<br>
+**（1）VertexLighting** <br>
 顶点光函数，计算主灯光外的其他光照，通常不在顶点着色器中计算多光源光照，所有可以不使用vertexLight。
-函数声明位置：Lighting.hlsl
 ```hlsl
+//------------------------------------------------------------------------------------------
+// \Library\PackageCache\com.unity.render-pipelines.universal@14.0.9\ShaderLibrary\Lighting.hlsl
+//------------------------------------------------------------------------------------------
 half3 VertexLighting(float3 positionWS, half3 normalWS)
 {
     half3 vertexLightColor = half3(0.0, 0.0, 0.0);
@@ -275,7 +281,7 @@ half3 VertexLighting(float3 positionWS, half3 normalWS)
 }
 ```
 当使用多光源时`_ADDITIONAL_LIGHTS_VERTEX`，fogFactor 和 vertexLight 存入 output.fogFactorAndVertexLight 中。
-**GetOddNegativeScale>**<br>
+**GetOddNegativeScale**<br>
 函数声明位置：SpaceTransforms.hlsl
 ```hlsl
 real GetOddNegativeScale()
@@ -370,13 +376,19 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 需要切线空间观察矢量时，先调用 `GetWorldSpaceNormalizeViewDir` 计算出世界空间的观察矢量viewDirWS，再调用
  `GetViewDirectionTangentSpace` 计算出 viewDirTS 存入 output.viewDirTS。
 
-### 5.7 LIGHTMAP_UV And SH 光照贴图UV和球谐光
+### 5.7 LIGHTMAP_UV光照贴图UV和SH球谐光
 ```hlsl
-OUTPUT_LIGHTMAP_UV(input.staticLightmapUV, unity_LightmapST, output.staticLightmapUV);
-OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
+    OUTPUT_LIGHTMAP_UV(input.staticLightmapUV, unity_LightmapST, output.staticLightmapUV);
+#ifdef DYNAMICLIGHTMAP_ON
+    output.dynamicLightmapUV = input.dynamicLightmapUV.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
+#endif
+    OUTPUT_SH(output.normalWS.xyz, output.vertexSH);
 ```
-OUTPUT_LIGHTMAP_UV 和 OUTPUT_SH 宏声明在 Lighting.hlsl 中:
+**（1）OUTPUT_LIGHTMAP_UV 和 OUTPUT_SH 定义**
 ```hlsl
+//---------------------------------------------------------------------------------------------
+// \Library\PackageCache\com.unity.render-pipelines.universal@14.0.9\ShaderLibrary\Lighting.hlsl
+//---------------------------------------------------------------------------------------------
 #if defined(LIGHTMAP_ON)
     #define DECLARE_LIGHTMAP_OR_SH(lmName, shName, index) float2 lmName : TEXCOORD##index
     #define OUTPUT_LIGHTMAP_UV(lightmapUV, lightmapScaleOffset, OUT) OUT.xy = lightmapUV.xy * lightmapScaleOffset.xy + lightmapScaleOffset.zw;
@@ -387,16 +399,23 @@ OUTPUT_LIGHTMAP_UV 和 OUTPUT_SH 宏声明在 Lighting.hlsl 中:
     #define OUTPUT_SH(normalWS, OUT) OUT.xyz = SampleSHVertex(normalWS)
 #endif
 ```
-当启用LIGHTMAP时，不计算球谐光SH，OUT输出LIGHTMAP的UV，如下：
+* 当启用LIGHTMAP时，shader不会计算球谐光SH，OUTPUT_SH无输出，OUTPUT_LIGHTMAP_UV输出LIGHTMAP的UV：
 ```hlsl
 OUT.xy = lightmapUV.xy * lightmapScaleOffset.xy + lightmapScaleOffset.zw;
 ```
-当不启用LIGHTMAP时，计算球谐光SH，OUT输出球谐光SH，如下：
+* 当不启用LIGHTMAP时，shader计算球谐光SH，OUT输出球谐光SH，如下：
 ```hlsl
 OUT.xyz = SampleSHVertex(normalWS)
 ```
-球谐光SH采样函数`SampleSHVertex`声明在 GlobalIllumination.hlsl 中。当启用宏 EVALUATE_SH_VERTEX 时，使用的是完整的球谐光照，计算了L0L1L2；当启用宏 EVALUATE_SH_MIXED 时，球谐光照仅计算了L2。在启用LIGHTMAP的情况下，球谐光为0。
+**（2）SH球谐光照** <br>
+* 当启用 EVALUATE_SH_VERTEX 时，`SampleSHVertex`计算的是完整的球谐光照，计算了L0L1L2；
+* 当启用 EVALUATE_SH_MIXED 时，`SampleSHVertex`仅计算了L2。
+* 当启用LIGHTMAP的情况时，不计算球谐光。
 ```hlsl
+// half3 SampleSHVertex(half3 normalWS)
+//---------------------------------------------------------------------------------------------------------
+// \Library\PackageCache\com.unity.render-pipelines.universal@14.0.9\ShaderLibrary\GlobalIllumination.hlsl
+//---------------------------------------------------------------------------------------------------------
 half3 SampleSHVertex(half3 normalWS)
 {
 #if defined(EVALUATE_SH_VERTEX)
