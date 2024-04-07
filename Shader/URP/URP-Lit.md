@@ -518,7 +518,7 @@ UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETU
 GetViewDirectionTangentSpace：
 ```hlsl
 //------------------------------------------------------------------------------------------------------------
-\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+// \Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 //------------------------------------------------------------------------------------------------------------
 half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDirWS)
 {
@@ -573,7 +573,7 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
 定义宏`_PARALLAXMAP`启用视差映射，使用`ApplyPerPixelDisplacement`函数计算视差。<br>
 ```hlsl
 //--------------------------------------------------------------------------------------------
-\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitForwardPass.hlsl
+// \Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitForwardPass.hlsl
 //--------------------------------------------------------------------------------------------
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)  
@@ -589,7 +589,7 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
 视差偏移就是对uv进行偏移。
 ```hlsl
 //--------------------------------------------------------------------------------------
-\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
+// \Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
 //--------------------------------------------------------------------------------------
 void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 {
@@ -602,7 +602,7 @@ void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 采样ParallaxMap视差图，调用ParallaxOffset1Step计算视差偏移。
 ```hlsl
 //--------------------------------------------------------------------------------------------
-\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+// \Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 //--------------------------------------------------------------------------------------------
 float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 viewDirTS, half scale, float2 uv)
 {
@@ -615,7 +615,7 @@ float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 view
 Unity使用的最简单的ParallaxMapping算法，根据输入的高度图（视差图_ParallaxMap）计算观察矢量的偏移。<br>
 ```hlsl
 //--------------------------------------------------------------------------------------------
-\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+// \Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
 //--------------------------------------------------------------------------------------------
 half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 {
@@ -629,7 +629,7 @@ half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 GetWorldSpaceNormalizeViewDir：
 ```hlsl
 //------------------------------------------------------------------------------------------------------------
-\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\ShaderLibrary\ShaderVariablesFunctions.hlsl
+// \Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\ShaderLibrary\ShaderVariablesFunctions.hlsl
 //------------------------------------------------------------------------------------------------------------
 float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
 {
