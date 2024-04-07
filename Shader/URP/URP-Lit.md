@@ -354,7 +354,7 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 `REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR` 表示需要一个切线空间的观察矢量插值器；<br>
 当使用这两个宏中的任意一个时，着色器计算世界空间切线tangentWS。tangentOS.w表用于判断不同平台的切线方向，sign计算了在当前平台切线的方向。
 
-4.6.1 tangentWS <br>
+5.6.1 tangentWS <br>
 需要世界空间切线时，将tangentWS存入output.tangentWS。
 ```hlsl
 #if defined(REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR)
@@ -362,7 +362,7 @@ output.uv = input.texcoord.xy * _BaseMap_ST.xy + _BaseMap_ST.zw;
 #endif
 ```
 
-4.6.2 viewDirTS 
+5.6.2 viewDirTS 
 ```hlsl
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
     half3 viewDirWS = GetWorldSpaceNormalizeViewDir(vertexInput.positionWS);
@@ -499,50 +499,27 @@ half4 LitPassFragment(Varyings input) : SV_Target
 UNITY_SETUP_INSTANCE_ID是用于记录不同实例属性ID的方法，UNITY_SETUP_INSTANCE_ID(input)可以用来访问全局unity_InstanceID，需放在顶点和片元着色器起始第一行。<br>
 如果需要将实例化ID传到片段着色器，则需在顶点着色器中增加UNITY_TRANSFER_INSTANCE_ID(v, o);
 
-### 6.2 viewDir 观察矢量
+### 6.2 tangentWS
+（1）使用以下三种变体任一一种时，着色器会计算tangentWS。
 ```hlsl
-#if defined(_PARALLAXMAP)
-#if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
-    half3 viewDirTS = input.viewDirTS;
-#else
-    //世界空间观察矢量
-    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
-    //切线空间观察矢量
-    half3 viewDirTS = GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, viewDirWS);
-#endif
-    ApplyPerPixelDisplacement(viewDirTS, input.uv);
-#endif
-```
-在声明`_PARALLAXMAP`启用视差图的情况下，根据`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`选择是否需要计算切线空间的观察向量。<br>
-`REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR`声明：
-```hlsl
+#pragma shader_feature_local _NORMALMAP                        //使用法线图
+#pragma shader_feature_local _PARALLAXMAP                      //使用视差图
+#pragma shader_feature_local _ _DETAIL_MULX2 _DETAIL_SCALED    //使用细节贴图
+
 #if defined(_PARALLAXMAP) && !defined(SHADER_API_GLES)
 #define REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR
 #endif
+
+#if (defined(_NORMALMAP) || (defined(_PARALLAXMAP) && !defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR))) || defined(_DETAIL)
+#define REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR 
+#endif
 ```
-1）GetWorldSpaceNormalizeViewDir 计算世界空间观察矢量 
-`GetWorldSpaceNormalizeViewDir`函数位置：
-\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\ShaderLibrary\ShaderVariablesFunctions.hlsl
+（2）计算切线空间观察矢量 tangentWS
+GetViewDirectionTangentSpace：
 ```hlsl
-float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
-{
-    if (IsPerspectiveProjection())
-    {
-        // Perspective 透视空间
-        float3 V = GetCurrentViewPosition() - positionWS;
-        return normalize(V);
-    }
-    else
-    {
-        // Orthographic 正交空间
-        return -GetViewForwardDir();
-    }
-}
-```
-2）GetViewDirectionTangentSpace 计算切线空间观察矢量
-`GetViewDirectionTangentSpace`函数位置：
+//------------------------------------------------------------------------------------------------------------
 \Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
-```hlsl
+//------------------------------------------------------------------------------------------------------------
 half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDirWS)
 {
     // must use interpolated tangent, bitangent and normal before they are normalized in the pixel shader.
@@ -568,7 +545,36 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
 }
 ```
 ### 6.3 PARALLAXMAP 视差图
+（1）Lit.shader预编译宏定义（shader变体）：
 ```hlsl
+#pragma shader_feature_local _PARALLAXMAP
+```
+（2）计算视差需要使用切线空间观察向量viewDirTS，获取viewDirTS有以下两种情况：<br>
+```hlsl
+//情况一：使用视差图且当前平台不是OpenGL ES2.0（桌面或移动），在顶点着色器中计算viewDirTS后输出到片元着色器。
+#if defined(_PARALLAXMAP) && !defined(SHADER_API_GLES)
+#define REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR
+#endif
+//情况二：使用视差图且当前平台是OpenGL ES2.0（桌面或移动），在片元着色器中计算viewDirTS。
+#if (defined(_NORMALMAP) || (defined(_PARALLAXMAP) && !defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR))) || defined(_DETAIL)
+#define REQUIRES_WORLD_SPACE_TANGENT_INTERPOLATOR 
+#endif
+```
+情况一：顶点着色器中计算viewDirTS
+```hlsl
+#if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)
+    half3 viewDirWS = GetWorldSpaceNormalizeViewDir(vertexInput.positionWS);
+    half3 viewDirTS = GetViewDirectionTangentSpace(tangentWS, output.normalWS, viewDirWS);
+    output.viewDirTS = viewDirTS;
+#endif
+```
+顶点着色器输出output.viewDirTS到片元着色器。<br>
+（3）视差计算
+定义宏`_PARALLAXMAP`启用视差映射，使用`ApplyPerPixelDisplacement`函数计算视差。<br>
+```hlsl
+//--------------------------------------------------------------------------------------------
+\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitForwardPass.hlsl
+//--------------------------------------------------------------------------------------------
 #if defined(_PARALLAXMAP)
 #if defined(REQUIRES_TANGENT_SPACE_VIEW_DIR_INTERPOLATOR)  
     half3 viewDirTS = input.viewDirTS;
@@ -579,10 +585,12 @@ half3 GetViewDirectionTangentSpace(half4 tangentWS, half3 normalWS, half3 viewDi
     ApplyPerPixelDisplacement(viewDirTS, input.uv);
 #endif
 ```
-URP预设宏`_PARALLAXMAP`启用视差映射，用`ApplyPerPixelDisplacement`函数计算视差图。<br>
 * `ApplyPerPixelDisplacement`<br>
-函数位置：\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
+视差偏移就是对uv进行偏移。
 ```hlsl
+//--------------------------------------------------------------------------------------
+\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\Shaders\LitInput.hlsl
+//--------------------------------------------------------------------------------------
 void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 {
 #if defined(_PARALLAXMAP)
@@ -591,8 +599,11 @@ void ApplyPerPixelDisplacement(half3 viewDirTS, inout float2 uv)
 }
 ```
 * `ParallaxMapping`<br>
-函数位置：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+采样ParallaxMap视差图，调用ParallaxOffset1Step计算视差偏移。
 ```hlsl
+//--------------------------------------------------------------------------------------------
+\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+//--------------------------------------------------------------------------------------------
 float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 viewDirTS, half scale, float2 uv)
 {
     half h = SAMPLE_TEXTURE2D(heightMap, sampler_heightMap, uv).g;
@@ -601,9 +612,11 @@ float2 ParallaxMapping(TEXTURE2D_PARAM(heightMap, sampler_heightMap), half3 view
 }
 ```
 * `ParallaxOffset1Step`<br>
-Unity使用的最简单的ParallaxMapping算法。<br>
-函数位置：\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+Unity使用的最简单的ParallaxMapping算法，根据输入的高度图（视差图_ParallaxMap）计算观察矢量的偏移。<br>
 ```hlsl
+//--------------------------------------------------------------------------------------------
+\Library\PackageCache\com.unity.render-pipelines.core@12.1.10\ShaderLibrary\ParallaxMapping.hlsl
+//--------------------------------------------------------------------------------------------
 half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
 {
     height = height * amplitude - amplitude / 2.0;
@@ -612,7 +625,27 @@ half2 ParallaxOffset1Step(half height, half amplitude, half3 viewDirTS)
     return height * (v.xy / v.z);
 }
 ```
-
+（4）计算世界空间观察矢量 viewDirTS
+GetWorldSpaceNormalizeViewDir：
+```hlsl
+//------------------------------------------------------------------------------------------------------------
+\Library\PackageCache\com.unity.render-pipelines.universal@12.1.10\ShaderLibrary\ShaderVariablesFunctions.hlsl
+//------------------------------------------------------------------------------------------------------------
+float3 GetWorldSpaceNormalizeViewDir(float3 positionWS)
+{
+    if (IsPerspectiveProjection())
+    {
+        // Perspective 透视空间
+        float3 V = GetCurrentViewPosition() - positionWS;
+        return normalize(V);
+    }
+    else
+    {
+        // Orthographic 正交空间
+        return -GetViewForwardDir();
+    }
+}
+```
 ### 6.4 初始化表面数据
 初始化模型表面数据和外部输入数据。
 ```hlsl
